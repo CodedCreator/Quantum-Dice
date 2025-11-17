@@ -20,7 +20,7 @@ The QuantumDice is an ESP32-based electronic dice system that supports both clas
 2. **IMU Sensor:** BNO055 9-axis sensor for motion detection and orientation
 3. **Displays:** 6x GC9A01A circular TFT displays (240x240px) - one per die face
 4. **Wireless:** ESP-NOW for low-latency inter-dice communication
-5. **Random Source:** ATECCX08A hardware random number generator
+5. **Random Source:** esp32 `esp_random()` random number generator
 6. **Power:** Battery-powered with voltage monitoring and deep sleep mode
 7. **User Input:** Physical button for mode switching
 
@@ -73,8 +73,7 @@ The setup function follows a critical initialization order:
 6. Startup Logo        - Show Quantum Lab logo
 7. IMU Init            - Initialize BNO055 sensor with calibration
 8. Button Init         - Configure button handlers
-9. Random Init         - Initialize ATECCX08A RNG
-10. State Machine      - Initialize ESP-NOW and state machine
+9. State Machine      - Initialize ESP-NOW and state machine
 ```
 
 **Critical Configuration:** The device cannot operate without valid EEPROM configuration. If configuration loading fails, the device halts with an error message.
@@ -322,22 +321,6 @@ struct HardwarePins {
   uint8_t adc_pin;                     // Battery voltage sense
 };
 ```
-
-### 7. Random Number Generation
-
-#### Hardware RNG (Primary)
-
-Uses ATECCX08A crypto chip:
-- `generateDiceRoll()` - Simple modulo method
-- `generateDiceRollRejection()` - Rejection sampling for uniform distribution
-
-**Rejection Sampling:** Requests random bytes until value < 252 (6×42), ensuring no bias in modulo operation.
-
-#### Fallback RNG
-
-If ATECCX08A unavailable, falls back to pseudo-random generator seeded from ADC noise.
-
----
 
 ## Quantum Entanglement Logic
 
@@ -595,7 +578,6 @@ Baud rate: 115200
 - **Adafruit_BNO055** - 9-axis IMU driver
 - **Adafruit_GFX** - Graphics primitives
 - **Adafruit_GC9A01A** - Display driver
-- **SparkFun_ATECCX08a_Arduino_Library** - Hardware RNG
 - **Button2** - Button event handling
 - **EEPROM** - Non-volatile storage
 - **WiFi** - ESP32 WiFi stack
@@ -633,7 +615,6 @@ The system halts execution on:
 
 - **IMU Read Failure:** Continues with stale data
 - **ESP-NOW Send Failure:** Logged to serial, message dropped
-- **Random Chip Unavailable:** Falls back to pseudo-random
 - **Low Battery:** Enters LOWBATTERY state, displays warning
 
 ---

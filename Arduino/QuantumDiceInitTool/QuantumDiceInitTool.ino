@@ -23,7 +23,6 @@
 #include <EEPROM.h>
 
 // Conditional includes - comment out if sensors not present
-#include <SparkFun_ATECCX08a_Arduino_Library.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <Adafruit_GC9A01A.h>  // For color constants
@@ -77,7 +76,6 @@ const DiceConfig defaultConfig = {
 };
 
 // ==================== GLOBAL OBJECTS ====================
-ATECCX08A atecc;
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
 
 // BNO055 sample rate
@@ -96,9 +94,6 @@ void testBNO055();
 void clearEEPROM();
 void configureEEPROMSettings();
 void parseMacAddress(String macStr, uint8_t* macList);
-
-// ATECC508a functions
-void printATECCInfo();
 
 // BNO055 functions
 void displaySensorDetails();
@@ -134,11 +129,6 @@ void setup() {
   // Initialize EEPROM
   EEPROM.begin(EEPROM_SIZE);
 
-  Serial.println("========================================");
-  Serial.println("  Check status of randomizer chip ATECC508a");
-  Serial.println("========================================");
-  configureATECC508a();
-
   displayMainMenu();
 }
 
@@ -165,15 +155,11 @@ void loop() {
         getMacAddress();
         break;
 
-      case '5':
-        configureATECC508a();
-        break;
-
       case '3':
         calibrateBNO055();
         break;
 
-      case '6':
+      case '5':
         testBNO055();
         break;
 
@@ -209,8 +195,7 @@ void displayMainMenu() {
   Serial.println("3. Calibrate BNO055 Sensor");
   Serial.println("========== Advanced options ============");
   Serial.println("4. Clear EEPROM (incl. calibration)");
-  Serial.println("5. Configure ATECC508a (PERMANENT)");
-  Serial.println("6. Test BNO055 Sensor (Live Data)");
+  Serial.println("5. Test BNO055 Sensor (Live Data)");
   Serial.println("========================================");
   Serial.println("M. Show this menu");
   Serial.println("========================================");
@@ -257,141 +242,6 @@ void parseMacAddress(String macStr, uint8_t* macList) {
   for (int i = 0; i < macStr.length(); i += 3) {
     macList[j] = strtol(macStr.substring(i, i + 2).c_str(), NULL, 16);
     j++;
-  }
-}
-
-// ==================== ATECC508a CONFIGURATION ====================
-void configureATECC508a() {
-  Serial.println("\n--- ATECC508a Configuration ---");
-
-  if (atecc.begin() == true) {
-    Serial.println("✓ ATECC508a detected - I2C connection good");
-  } else {
-    Serial.println("✗ ATECC508a not found!");
-    Serial.println("Check wiring and I2C address.");
-    Serial.println("\nPress M for menu");
-    return;
-  }
-
-  Serial.println();
-  printATECCInfo();
-
-  // Check if already fully configured
-  if (atecc.configLockStatus && atecc.dataOTPLockStatus && atecc.slot0LockStatus) {
-    Serial.println("\n✓ ATECC508a is already fully configured and locked!");
-    Serial.println("All zones are locked - no further configuration needed.");
-    Serial.println("The device is ready to use.");
-    Serial.println("\nPress M for menu");
-    return;
-  }
-
-  Serial.println("\n*** WARNING ***");
-  Serial.println("Configuration settings are PERMANENT and cannot be changed!");
-  Serial.println();
-  Serial.println("Would you like to configure with SparkFun Standard settings?");
-  Serial.println("Type 'Y' to proceed or any other key to cancel:");
-
-  // Wait for user input
-  while (Serial.available() == 0) {
-    delay(10);
-  }
-
-  char response = Serial.read();
-  while (Serial.available() > 0) Serial.read();  // Clear buffer
-
-  if (response == 'Y' || response == 'y') {
-    Serial.println("\n>>> Starting configuration... <<<\n");
-
-    if (!atecc.configLockStatus) {
-      Serial.print("Write Config:   ");
-      if (atecc.writeConfigSparkFun() == true) {
-        Serial.println("✓ Success");
-      } else {
-        Serial.println("✗ Failure");
-      }
-
-      Serial.print("Lock Config:    ");
-      if (atecc.lockConfig() == true) {
-        Serial.println("✓ Success");
-      } else {
-        Serial.println("✗ Failure");
-      }
-    } else {
-      Serial.println("Config Zone:    Already locked ✓");
-    }
-
-    if (!atecc.dataOTPLockStatus) {
-      Serial.print("Key Creation:   ");
-      if (atecc.createNewKeyPair() == true) {
-        Serial.println("✓ Success");
-      } else {
-        Serial.println("✗ Failure");
-      }
-
-      Serial.print("Lock Data-OTP:  ");
-      if (atecc.lockDataAndOTP() == true) {
-        Serial.println("✓ Success");
-      } else {
-        Serial.println("✗ Failure");
-      }
-    } else {
-      Serial.println("Data-OTP Zone:  Already locked ✓");
-    }
-
-    if (!atecc.slot0LockStatus) {
-      Serial.print("Lock Slot 0:    ");
-      if (atecc.lockDataSlot0() == true) {
-        Serial.println("✓ Success");
-      } else {
-        Serial.println("✗ Failure");
-      }
-    } else {
-      Serial.println("Slot 0:         Already locked ✓");
-    }
-
-    Serial.println("\n>>> Configuration complete! <<<");
-    Serial.println();
-    printATECCInfo();
-  } else {
-    Serial.println("\nConfiguration cancelled.");
-    Serial.println("Note: ATECC508a features require configuration.");
-  }
-
-  Serial.println("\nPress M for menu");
-}
-
-void printATECCInfo() {
-  atecc.readConfigZone(false);
-
-  Serial.print("Serial Number:  ");
-  for (int i = 0; i < 9; i++) {
-    if ((atecc.serialNumber[i] >> 4) == 0) Serial.print("0");
-    Serial.print(atecc.serialNumber[i], HEX);
-  }
-  Serial.println();
-
-  Serial.print("Rev Number:     ");
-  for (int i = 0; i < 4; i++) {
-    if ((atecc.revisionNumber[i] >> 4) == 0) Serial.print("0");
-    Serial.print(atecc.revisionNumber[i], HEX);
-  }
-  Serial.println();
-
-  Serial.print("Config Zone:    ");
-  Serial.println(atecc.configLockStatus ? "Locked" : "NOT Locked");
-
-  Serial.print("Data/OTP Zone:  ");
-  Serial.println(atecc.dataOTPLockStatus ? "Locked" : "NOT Locked");
-
-  Serial.print("Data Slot 0:    ");
-  Serial.println(atecc.slot0LockStatus ? "Locked" : "NOT Locked");
-
-  // If fully configured, show public key
-  if (atecc.configLockStatus && atecc.dataOTPLockStatus && atecc.slot0LockStatus) {
-    Serial.println();
-    if (atecc.generatePublicKey() == false) {
-      Serial.println("✗ Failed to generate public key");
-    }
   }
 }
 

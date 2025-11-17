@@ -67,9 +67,6 @@ void setup() {
   // Initialize button
   initButton();
   
-  // Initialize random number generators
-  initRandomGenerators();
-  
   // Initialize the state machine - this sets up ESP-NOW with config MACs
   stateMachine.begin();
   
