@@ -2,7 +2,6 @@
 #define HANDYHELPERS_H_
 
 #include <sys/_stdint.h>
-#include <SparkFun_ATECCX08a_Arduino_Library.h>
 #include <Button2.h>
 #include <EEPROM.h>
 
@@ -72,7 +71,6 @@ void printHardwarePins();
 
 // Existing declarations
 extern RTC_DATA_ATTR int bootCount;
-extern bool randomChipPresent;
 extern Button2 button;
 extern bool clicked;
 extern bool longclicked;
@@ -85,7 +83,6 @@ bool checkMinimumVoltage();
 float mapFloat(float x, float in_min, float in_max, float out_min, float out_max, bool clipOutput);
 bool withinBounds(float val, float minimum, float maximum);
 void initSerial();
-void initRandomGenerators();
 uint8_t generateDiceRollRejection();
 uint8_t generateDiceRoll();
 
