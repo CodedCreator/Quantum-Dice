@@ -18,5 +18,6 @@
 //#define VERSION "075" //config file in eeprom
 //#define VERSION "1.0.0" //release version
 //#define VERSION "1.0.1" //increase stable criterium
-#define VERSION "1.1.0" //added: when in entanglement mode (yellow 1to6) and one dice is measured, the other will have the white 1to6 screen
+//#define VERSION "1.1.0" //added: when in entanglement mode (yellow 1to6) and one dice is measured, the other will have the white 1to6 screen
+#define VERSION "1.1.1" //removed ATECC chip and use esp32 internal random generator
 #endif // VERSION_H
