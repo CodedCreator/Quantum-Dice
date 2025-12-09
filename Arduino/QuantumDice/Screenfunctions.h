@@ -1,11 +1,11 @@
 #ifndef SCREENFUNCTIONS_H_
 #define SCREENFUNCTIONS_H_
-#include <SPI.h>
-#include <Adafruit_GFX.h>
 #include <Adafruit_GC9A01A.h>
+#include <Adafruit_GFX.h>
 #include <Fonts/FreeSans18pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansOblique12pt7b.h>
+#include <SPI.h>
 
 #define HEIGHT 240
 #define WIDTH 240
@@ -15,23 +15,23 @@
 #define DOT_OFFSET 60
 
 // Screen selection enum (moved from conditional compilation)
-enum screenselections { 
-  X0,
-  X1,
-  Y0,
-  Y1,
-  Z0,
-  Z1,
-  XX,
-  YY,
-  ZZ,
-  XXYY,
-  XXZZ,
-  YYZZ,
-  ODD,
-  EVEN,
-  ALL,
-  NO_ONE
+enum screenselections {
+    X0,
+    X1,
+    Y0,
+    Y1,
+    Z0,
+    Z1,
+    XX,
+    YY,
+    ZZ,
+    XXYY,
+    XXZZ,
+    YYZZ,
+    ODD,
+    EVEN,
+    ALL,
+    NO_ONE
 };
 
 extern screenselections selectScreen;
@@ -39,7 +39,8 @@ extern int dotDia;
 
 void selectScreens(uint8_t i);
 uint16_t blendColor(uint16_t foreground, uint16_t background, float alpha);
-void drawDot(int x, int y, float alpha = 1.0, uint16_t color = GC9A01A_WHITE, uint16_t bgColor = GC9A01A_BLACK);
+void drawDot(int x, int y, float alpha = 1.0, uint16_t color = GC9A01A_WHITE,
+             uint16_t bgColor = GC9A01A_BLACK);
 void displayImageWithBackground(const unsigned short* image, uint8_t screens);
 void initDisplays();
 void blankScreen(uint8_t screens);
@@ -64,7 +65,8 @@ void displayN6(uint8_t screens);
 void displayMix1to6(uint8_t screens);
 void displayMix1to6_entAB1(uint8_t screens);
 void displayMix1to6_entAB2(uint8_t screens);
-void printChar(uint8_t screens, char* letters, uint16_t fontcolor, uint16_t bckcolor, int x, int y);
+void printChar(uint8_t screens, char* letters, uint16_t fontcolor,
+               uint16_t bckcolor, int x, int y);
 void voltageIndicator(uint8_t screens);
 void welcomeInfo(uint8_t screens);
 void drawStringCentered(Adafruit_GFX& gfx, const String& text, int16_t y);
