@@ -18,8 +18,36 @@
   Release Version: 1.0.0
 */
 
+#include "ESP32_NOW_Serial.h"
+#include "MacAddress.h"
+#include "WiFi.h"
+
+#include "esp_wifi.h"
+
+// 0: AP mode, 1: Station mode
+#define ESPNOW_WIFI_MODE_STATION 1
+
+// Channel to be used by the ESP-NOW protocol
+#define ESPNOW_WIFI_CHANNEL 1
+
+#if ESPNOW_WIFI_MODE_STATION        // ESP-NOW using WiFi Station mode
+#define ESPNOW_WIFI_MODE WIFI_STA   // WiFi Mode
+#define ESPNOW_WIFI_IF WIFI_IF_STA  // WiFi Interface
+#else                               // ESP-NOW using WiFi AP mode
+#define ESPNOW_WIFI_MODE WIFI_AP    // WiFi Mode
+#define ESPNOW_WIFI_IF WIFI_IF_AP   // WiFi Interface
+#endif
+
+// Set the MAC address of the device that will receive the data
+// For example: 64:e8:33:70:1c:a8
+const MacAddress peer_mac({ 0x64, 0xE8, 0x33, 0x70, 0x1C, 0xA8 });
+
+ESP_NOW_Serial_Class NowSerial(peer_mac, ESPNOW_WIFI_CHANNEL, ESPNOW_WIFI_IF);
+
+
+
 #include <Wire.h>
-#include <WiFi.h>
+//#include <WiFi.h>
 #include <EEPROM.h>
 
 // Conditional includes - comment out if sensors not present
@@ -116,6 +144,28 @@ uint16_t readColorFromSerial();
 void setup() {
   Serial.begin(115200);
   delay(2000);
+
+  Serial.print("WiFi Mode: ");
+  Serial.println(ESPNOW_WIFI_MODE == WIFI_AP ? "AP" : "Station");
+  WiFi.mode(ESPNOW_WIFI_MODE);
+
+  Serial.print("Channel: ");
+  Serial.println(ESPNOW_WIFI_CHANNEL);
+  WiFi.setChannel(ESPNOW_WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
+
+  while (!(WiFi.STA.started() || WiFi.AP.started())) {
+    delay(100);
+  }
+
+  Serial.print("MAC Address: ");
+  Serial.println(ESPNOW_WIFI_MODE == WIFI_AP ? WiFi.softAPmacAddress() : WiFi.macAddress());
+
+  // Start the ESP-NOW communication
+  Serial.println("ESP-NOW communication starting...");
+  NowSerial.begin(115200);
+  Serial.printf("ESP-NOW version: %d, max data length: %d\n", ESP_NOW.getVersion(), ESP_NOW.getMaxDataLen());
+  Serial.println("You can now send data to the peer device using the Serial Monitor.\n");
+
 
   Serial.println("\n\n");
   Serial.println("========================================");
@@ -364,22 +414,22 @@ void performCalibration() {
     displayCalStatus();
 
     // Display linear acceleration with clear offset warning
-    Serial.print(" | Linear: ");
-    Serial.print(mag, 3);
-    Serial.print(" m/s² ");
+    NowSerial.print(" | Linear: ");
+    NowSerial.print(mag, 3);
+    NowSerial.print(" m/s² ");
 
     // Color-coded threshold indicators
     if (mag > 0.5) {
-      Serial.print("[⚠⚠ HIGH OFFSET - Keep calibrating! ]");
+      NowSerial.print("[⚠⚠ HIGH OFFSET - Keep calibrating! ]");
     } else if (mag > 0.3) {
-      Serial.print("[⚠ Moderate offset - Almost there  ]");
+      NowSerial.print("[⚠ Moderate offset - Almost there  ]");
     } else if (mag > 0.15) {
-      Serial.print("[✓ Good - Continue for best results]");
+      NowSerial.print("[✓ Good - Continue for best results]");
     } else {
-      Serial.print("[✓✓ Excellent offset!              ]");
+      NowSerial.print("[✓✓ Excellent offset!              ]");
     }
 
-    Serial.println();
+    NowSerial.println();
     delay(BNO055_SAMPLERATE_DELAY_MS);
   }
 
@@ -390,10 +440,10 @@ void performCalibration() {
     return;
   }
 
-  Serial.println("\n✓ Fully calibrated!");
+  NowSerial.println("\n✓ Fully calibrated!");
 
   // Verify final offset
-  Serial.println("\nVerifying calibration quality...");
+  NowSerial.println("\nVerifying calibration quality...");
   delay(500);
   bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
   double x = linearAccelData.acceleration.x;
@@ -401,19 +451,19 @@ void performCalibration() {
   double z = linearAccelData.acceleration.z;
   double finalMag = sqrt(x * x + y * y + z * z);
 
-  Serial.print("Final linear acceleration offset: ");
-  Serial.print(finalMag, 4);
-  Serial.print(" m/s² ");
+  NowSerial.print("Final linear acceleration offset: ");
+  NowSerial.print(finalMag, 4);
+  NowSerial.print(" m/s² ");
 
   if (finalMag < 0.15) {
-    Serial.println("- Excellent! ✓✓");
+    NowSerial.println("- Excellent! ✓✓");
   } else if (finalMag < 0.3) {
-    Serial.println("- Good ✓");
+    NowSerial.println("- Good ✓");
   } else {
-    Serial.println("- Consider recalibrating for better accuracy ⚠");
+    NowSerial.println("- Consider recalibrating for better accuracy ⚠");
   }
 
-  Serial.println("================================");
+  NowSerial.println("================================");
 
   // Get and display calibration data
   adafruit_bno055_offsets_t newCalib;
@@ -481,41 +531,69 @@ void testBNO055() {
     bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
     bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
     bno.getEvent(&gravityData, Adafruit_BNO055::VECTOR_GRAVITY);
+    bno.getEvent(&accelerometerData, Adafruit_BNO055::VECTOR_ACCELEROMETER);
 
     // Calculate linear acceleration magnitude
-    double x = linearAccelData.acceleration.x;
-    double y = linearAccelData.acceleration.y;
-    double z = linearAccelData.acceleration.z;
-    double mag = sqrt(x * x + y * y + z * z);
+    double xlin = linearAccelData.acceleration.x;
+    double ylin = linearAccelData.acceleration.y;
+    double zlin = linearAccelData.acceleration.z;
+    double magLin = sqrt(xlin * xlin + ylin * ylin + zlin * zlin);
+    double x = accelerometerData.acceleration.x;
+    double y = accelerometerData.acceleration.y;
+    double z = accelerometerData.acceleration.z;
+    double mag = sqrt(x * x + y * y + z * z) - 9.81;
+    double xg = gravityData.acceleration.x;
+    double yg = gravityData.acceleration.y;
+    double zg = gravityData.acceleration.z;
+    double magG = sqrt(xg * xg + yg * yg + zg * zg);
 
     // Display calibration status
     displayCalStatus();
-    Serial.print(" | ");
+    NowSerial.print(" | ");
 
     // Display linear acceleration with alert
-    Serial.print("Linear: ");
-    Serial.print(mag, 3);
-    Serial.print(" m/s²");
+    //NowSerial.print("Linear: ");
+    //NowSerial.print(mag, 3);
+    //    NowSerial.print(" m/s²");
 
-    // Alert if magnitude exceeds threshold
-    if (mag > 0.4) {
-      Serial.print(" [⚠⚠ HIGH - Recalibrate!]");
-    } else if (mag > 0.2) {
-      Serial.print(" [⚠ Elevated          ]");
-    } else if (mag > 0.15) {
-      Serial.print(" [✓ Acceptable        ]");
-    } else {
-      Serial.print(" [✓✓ Excellent        ]");
-    }
+    // // Alert if magnitude exceeds threshold
+    // if (mag > 0.4) {
+    //   Serial.print(" [⚠⚠ HIGH - Recalibrate!]");
+    // } else if (mag > 0.2) {
+    //   Serial.print(" [⚠ Elevated          ]");
+    // } else if (mag > 0.15) {
+    //   Serial.print(" [✓ Acceptable        ]");
+    // } else {
+    //   Serial.print(" [✓✓ Excellent        ]");
+    // }
 
-    Serial.print(" | X:");
-    Serial.print(x, 3);
-    Serial.print(" Y:");
-    Serial.print(y, 3);
-    Serial.print(" Z:");
-    Serial.print(z, 3);
+    NowSerial.print(" X:");
+    NowSerial.print(x, 3);
+    NowSerial.print(" Y:");
+    NowSerial.print(y, 3);
+    NowSerial.print(" Z:");
+    NowSerial.print(z, 3);
+    NowSerial.print(" mag: ");
+    NowSerial.print(mag, 3);
 
-    Serial.println();
+    NowSerial.print(" | XL:");
+    NowSerial.print(xlin, 3);
+    NowSerial.print(" YL:");
+    NowSerial.print(ylin, 3);
+    NowSerial.print(" ZL:");
+    NowSerial.print(zlin, 3);
+    NowSerial.print(" magL: ");
+    NowSerial.print(magLin, 3);
+    NowSerial.print(" | XG:");
+    NowSerial.print(xg, 3);
+    NowSerial.print(" YG:");
+    NowSerial.print(yg, 3);
+    NowSerial.print(" ZG:");
+    NowSerial.print(zg, 3);
+    NowSerial.print(" magG:");
+    NowSerial.print(magG, 3);
+
+    NowSerial.println();
 
     delay(BNO055_SAMPLERATE_DELAY_MS);
   }
@@ -569,91 +647,91 @@ void displayCalStatus() {
   system = gyro = accel = mag = 0;
   bno.getCalibration(&system, &gyro, &accel, &mag);
 
-  if (!system) Serial.print("! ");
-  Serial.print("Cal: Sys:");
-  Serial.print(system, DEC);
-  Serial.print(" G:");
-  Serial.print(gyro, DEC);
-  Serial.print(" A:");
-  Serial.print(accel, DEC);
-  Serial.print(" M:");
-  Serial.print(mag, DEC);
+  if (!system) NowSerial.print("! ");
+  NowSerial.print("Cal: Sys:");
+  NowSerial.print(system, DEC);
+  NowSerial.print(" G:");
+  NowSerial.print(gyro, DEC);
+  NowSerial.print(" A:");
+  NowSerial.print(accel, DEC);
+  NowSerial.print(" M:");
+  NowSerial.print(mag, DEC);
 }
 
 void displaySensorOffsets(const adafruit_bno055_offsets_t& calibData) {
-  Serial.print("Accel: ");
-  Serial.print(calibData.accel_offset_x);
-  Serial.print(" ");
-  Serial.print(calibData.accel_offset_y);
-  Serial.print(" ");
-  Serial.print(calibData.accel_offset_z);
+  NowSerial.print("Accel: ");
+  NowSerial.print(calibData.accel_offset_x);
+  NowSerial.print(" ");
+  NowSerial.print(calibData.accel_offset_y);
+  NowSerial.print(" ");
+  NowSerial.print(calibData.accel_offset_z);
 
-  Serial.print(" | Gyro: ");
-  Serial.print(calibData.gyro_offset_x);
-  Serial.print(" ");
-  Serial.print(calibData.gyro_offset_y);
-  Serial.print(" ");
-  Serial.print(calibData.gyro_offset_z);
+  NowSerial.print(" | Gyro: ");
+  NowSerial.print(calibData.gyro_offset_x);
+  NowSerial.print(" ");
+  NowSerial.print(calibData.gyro_offset_y);
+  NowSerial.print(" ");
+  NowSerial.print(calibData.gyro_offset_z);
 
-  Serial.print(" | Mag: ");
-  Serial.print(calibData.mag_offset_x);
-  Serial.print(" ");
-  Serial.print(calibData.mag_offset_y);
-  Serial.print(" ");
-  Serial.print(calibData.mag_offset_z);
+  NowSerial.print(" | Mag: ");
+  NowSerial.print(calibData.mag_offset_x);
+  NowSerial.print(" ");
+  NowSerial.print(calibData.mag_offset_y);
+  NowSerial.print(" ");
+  NowSerial.print(calibData.mag_offset_z);
 
-  Serial.print(" | Radius: A:");
-  Serial.print(calibData.accel_radius);
-  Serial.print(" M:");
-  Serial.println(calibData.mag_radius);
+  NowSerial.print(" | Radius: A:");
+  NowSerial.print(calibData.accel_radius);
+  NowSerial.print(" M:");
+  NowSerial.println(calibData.mag_radius);
 }
 
 void printEvent(sensors_event_t* event) {
   double x = -1000000, y = -1000000, z = -1000000, mag = 0;
 
   if (event->type == SENSOR_TYPE_ACCELEROMETER) {
-    Serial.print("Accl:");
+    NowSerial.print("Accl:");
     x = event->acceleration.x;
     y = event->acceleration.y;
     z = event->acceleration.z;
   } else if (event->type == SENSOR_TYPE_ORIENTATION) {
-    Serial.print("Orient:");
+    NowSerial.print("Orient:");
     x = event->orientation.x;
     y = event->orientation.y;
     z = event->orientation.z;
   } else if (event->type == SENSOR_TYPE_MAGNETIC_FIELD) {
-    Serial.print("Mag:");
+    NowSerial.print("Mag:");
     x = event->magnetic.x;
     y = event->magnetic.y;
     z = event->magnetic.z;
   } else if (event->type == SENSOR_TYPE_GYROSCOPE) {
-    Serial.print("Gyro:");
+    NowSerial.print("Gyro:");
     x = event->gyro.x;
     y = event->gyro.y;
     z = event->gyro.z;
   } else if (event->type == SENSOR_TYPE_LINEAR_ACCELERATION) {
-    Serial.print("Linear:");
+    NowSerial.print("Linear:");
     x = event->acceleration.x;
     y = event->acceleration.y;
     z = event->acceleration.z;
     mag = sqrt(x * x + y * y + z * z);
-    Serial.print(mag);
-    if (mag > 0.4) Serial.print(" ⚠ ALARM");
+    NowSerial.print(mag);
+    if (mag > 0.4) NowSerial.print(" ⚠ ALARM");
   } else if (event->type == SENSOR_TYPE_GRAVITY) {
-    Serial.print("Gravity:");
+    NowSerial.print("Gravity:");
     x = event->acceleration.x;
     y = event->acceleration.y;
     z = event->acceleration.z;
   } else {
-    Serial.print("Unk:");
+    NowSerial.print("Unk:");
   }
 
-  Serial.print("\tx=");
-  Serial.print(x);
-  Serial.print(" |\ty=");
-  Serial.print(y);
-  Serial.print(" |\tz=");
-  Serial.println(z);
+  NowSerial.print("\tx=");
+  NowSerial.print(x);
+  NowSerial.print(" |\ty=");
+  NowSerial.print(y);
+  NowSerial.print(" |\tz=");
+  NowSerial.println(z);
 }
 
 // ==================== CLEAR EEPROM ====================
@@ -701,11 +779,11 @@ void configureEEPROMSettings() {
   Serial.println("\n========================================");
   Serial.println("    EEPROM Configuration Setup");
   Serial.println("========================================\n");
-  
+
   // Check if configuration already exists
   DiceConfig existingConfig;
   bool hasExisting = readEEPROMConfig(existingConfig);
-  
+
   if (hasExisting) {
     Serial.println("✓ Current configuration found in EEPROM:\n");
     printConfig(existingConfig, "Current Configuration");
@@ -713,10 +791,10 @@ void configureEEPROMSettings() {
     Serial.println("  N - Keep current configuration");
     Serial.println("  Y - Configure new settings");
     Serial.print("\nYour choice: ");
-    
+
     while (Serial.available() == 0) delay(10);
     char response = Serial.read();
-    
+
     // Consume any trailing newlines
     delay(50);
     while (Serial.available() > 0) {
@@ -727,9 +805,9 @@ void configureEEPROMSettings() {
         break;
       }
     }
-    
+
     Serial.println(response);
-    
+
     if (response != 'Y' && response != 'y') {
       Serial.println("\nKeeping current configuration.");
       Serial.println("Press M for menu");
@@ -739,11 +817,11 @@ void configureEEPROMSettings() {
     Serial.println("⚠ No valid configuration found in EEPROM");
     Serial.println("Let's configure your device!\n");
   }
-  
+
   // Create new configuration starting with appropriate defaults
   DiceConfig newConfig;
   DiceConfig displayDefaults;
-  
+
   if (hasExisting) {
     // Use existing config as the base
     newConfig = existingConfig;
@@ -755,13 +833,13 @@ void configureEEPROMSettings() {
     displayDefaults = defaultConfig;
     Serial.println("\nCreating new configuration...");
   }
-  
+
   Serial.println("\n========================================");
   Serial.println("  Interactive Configuration");
   Serial.println("========================================");
   Serial.println("Press ENTER to accept default, or type new value");
   Serial.println("Press 'Q' at any time to quit without saving\n");
-  
+
   // Dice ID
   Serial.println("----------------------------------------");
   Serial.printf("Dice ID [%s]: ", displayDefaults.diceId);
@@ -775,7 +853,7 @@ void configureEEPROMSettings() {
     strncpy(newConfig.diceId, input.c_str(), 15);
     newConfig.diceId[15] = '\0';
   }
-  
+
   // Device A MAC
   Serial.println("\n----------------------------------------");
   Serial.print("Device A MAC [");
@@ -795,7 +873,7 @@ void configureEEPROMSettings() {
     // Keep current/default
     memcpy(newConfig.deviceA_mac, displayDefaults.deviceA_mac, 6);
   }
-  
+
   // Device B1 MAC
   Serial.println("\n----------------------------------------");
   Serial.print("Device B1 MAC [");
@@ -814,7 +892,7 @@ void configureEEPROMSettings() {
   if (macResult == 0) {
     memcpy(newConfig.deviceB1_mac, displayDefaults.deviceB1_mac, 6);
   }
-  
+
   // Device B2 MAC
   Serial.println("\n----------------------------------------");
   Serial.print("Device B2 MAC [");
@@ -833,7 +911,7 @@ void configureEEPROMSettings() {
   if (macResult == 0) {
     memcpy(newConfig.deviceB2_mac, displayDefaults.deviceB2_mac, 6);
   }
-  
+
   // X Background Color
   Serial.println("\n----------------------------------------");
   Serial.printf("X Background Color [0x%04X]: ", displayDefaults.x_background);
@@ -846,7 +924,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.x_background = strtoul(input.c_str(), NULL, 16);
   }
-  
+
   // Y Background Color
   Serial.printf("Y Background Color [0x%04X]: ", displayDefaults.y_background);
   input = readSerialLine();
@@ -858,7 +936,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.y_background = strtoul(input.c_str(), NULL, 16);
   }
-  
+
   // Z Background Color
   Serial.printf("Z Background Color [0x%04X]: ", displayDefaults.z_background);
   input = readSerialLine();
@@ -870,7 +948,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.z_background = strtoul(input.c_str(), NULL, 16);
   }
-  
+
   // Entanglement AB1 Color
   Serial.printf("Entanglement AB1 Color [0x%04X]: ", displayDefaults.entang_ab1_color);
   input = readSerialLine();
@@ -882,7 +960,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.entang_ab1_color = strtoul(input.c_str(), NULL, 16);
   }
-  
+
   // Entanglement AB2 Color
   Serial.printf("Entanglement AB2 Color [0x%04X]: ", displayDefaults.entang_ab2_color);
   input = readSerialLine();
@@ -894,7 +972,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.entang_ab2_color = strtoul(input.c_str(), NULL, 16);
   }
-  
+
   // RSSI Limit
   Serial.println("\n----------------------------------------");
   Serial.printf("RSSI Limit in dBm [%d]: ", displayDefaults.rssiLimit);
@@ -907,7 +985,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.rssiLimit = input.toInt();
   }
-  
+
   // Board Type
   Serial.println("\n----------------------------------------");
   Serial.printf("Is NANO board? (Y/N) [%s]: ", displayDefaults.isNano ? "Y" : "N");
@@ -920,7 +998,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.isNano = (input[0] == 'Y' || input[0] == 'y');
   }
-  
+
   // Screen Type
   Serial.printf("Is SMD screen? (Y/N) [%s]: ", displayDefaults.isSMD ? "Y" : "N");
   input = readSerialLine();
@@ -932,7 +1010,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.isSMD = (input[0] == 'Y' || input[0] == 'y');
   }
-  
+
   // Always Seven
   Serial.println("\n----------------------------------------");
   Serial.printf("Always Seven mode? (Y/N) [%s]: ", displayDefaults.alwaysSeven ? "Y" : "N");
@@ -945,7 +1023,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.alwaysSeven = (input[0] == 'Y' || input[0] == 'y');
   }
-  
+
   // Random Switch Point
   Serial.printf("Random Switch Point (0-100) [%d]: ", displayDefaults.randomSwitchPoint);
   input = readSerialLine();
@@ -957,7 +1035,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.randomSwitchPoint = input.toInt();
   }
-  
+
   // Tumble Constant
   Serial.printf("Tumble Constant [%.2f]: ", displayDefaults.tumbleConstant);
   input = readSerialLine();
@@ -969,7 +1047,7 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.tumbleConstant = input.toFloat();
   }
-  
+
   // Deep Sleep Timeout
   Serial.println("\n----------------------------------------");
   Serial.printf("Deep Sleep Timeout in seconds [%d]: ", displayDefaults.deepSleepTimeout / 1000);
@@ -982,19 +1060,19 @@ void configureEEPROMSettings() {
   if (input.length() > 0) {
     newConfig.deepSleepTimeout = input.toInt() * 1000;
   }
-  
+
   // Show summary and confirm
   Serial.println("\n========================================");
   Serial.println("  Configuration Summary");
   Serial.println("========================================\n");
   printConfig(newConfig, "New Configuration");
-  
+
   Serial.println("\nWrite this configuration to EEPROM?");
   Serial.println("Type 'Y' to confirm or any other key to cancel:");
-  
+
   while (Serial.available() == 0) delay(10);
   char response = Serial.read();
-  
+
   // Consume any trailing newlines
   delay(50);
   while (Serial.available() > 0) {
@@ -1005,13 +1083,13 @@ void configureEEPROMSettings() {
       break;
     }
   }
-  
+
   if (response == 'Y' || response == 'y') {
     // Validate before writing
     if (validateConfig(newConfig)) {
       writeEEPROMConfig(newConfig);
       Serial.println("\n✓ Configuration written to EEPROM successfully!");
-      
+
       // Verify by reading back
       Serial.println("\nVerifying...");
       DiceConfig verifyConfig;
@@ -1027,7 +1105,7 @@ void configureEEPROMSettings() {
   } else {
     Serial.println("\nConfiguration cancelled. EEPROM unchanged.");
   }
-  
+
   Serial.println("\nPress M for menu");
 }
 
@@ -1037,12 +1115,12 @@ String readSerialLine() {
   String input = "";
   unsigned long startTime = millis();
   bool gotNewline = false;
-  
+
   // Wait for input with 30 second timeout
   while (millis() - startTime < 30000) {
     if (Serial.available() > 0) {
       char c = Serial.read();
-      
+
       if (c == '\n' || c == '\r') {
         if (input.length() > 0) {
           // Check if user wants to quit
@@ -1062,7 +1140,7 @@ String readSerialLine() {
             if (Serial.available() > 0) {
               char nc = Serial.peek();
               if (nc == '\n' || nc == '\r') {
-                Serial.read(); // Consume it
+                Serial.read();  // Consume it
               } else {
                 break;
               }
@@ -1078,7 +1156,7 @@ String readSerialLine() {
     }
     delay(10);
   }
-  
+
   // If we got a newline, consume any remaining newline characters
   if (gotNewline) {
     delay(50);  // Wait for any trailing newlines
@@ -1091,7 +1169,7 @@ String readSerialLine() {
       }
     }
   }
-  
+
   Serial.println();  // Newline after input
   return input;
 }
@@ -1099,40 +1177,40 @@ String readSerialLine() {
 int readMacFromSerial(uint8_t* mac) {
   // Returns: -1 = quit, 0 = use default, 1 = new MAC entered
   String input = readSerialLine();
-  
+
   // Check if user wants to quit
   if (input == "QUIT_CONFIG") {
     return -1;
   }
-  
+
   if (input.length() == 0) {
     return 0;  // Use default
   }
-  
+
   // Remove colons and spaces
   input.replace(":", "");
   input.replace(" ", "");
   input.toUpperCase();
-  
+
   // Check length
   if (input.length() != 12) {
     Serial.println("⚠ Invalid MAC format, using default");
     return 0;
   }
-  
+
   // Parse hex values
   for (int i = 0; i < 6; i++) {
     String byteStr = input.substring(i * 2, i * 2 + 2);
     mac[i] = strtoul(byteStr.c_str(), NULL, 16);
   }
-  
+
   Serial.print("✓ MAC set to: ");
   for (int i = 0; i < 6; i++) {
     Serial.printf("%02X", mac[i]);
     if (i < 5) Serial.print(":");
   }
   Serial.println();
-  
+
   return 1;
 }
 

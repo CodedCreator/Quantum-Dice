@@ -1,77 +1,275 @@
+/*
+  IMUhelpers.h - Polymorphic IMU sensor interface
+  
+  Architecture:
+  - IMUSensor: Abstract base class defining the interface for any IMU sensor
+  - BNO055IMUSensor: Concrete implementation for BNO055 sensor
+  
+  Usage in main code:
+    IMUSensor *imuSensor;
+    imuSensor = new BNO055IMUSensor();
+    imuSensor->init();
+    
+  Usage in StateMachine:
+    void StateMachine::setImuSensor(IMUSensor *imuSensor) {
+      _imuSensor = imuSensor;
+    }
+    
+    void StateMachine::update() {
+      _imuSensor->update();
+      if (_imuSensor->moving()) {
+        // handle motion
+      }
+    }
+*/
+
 #ifndef IMUHELPERS_H_
 #define IMUHELPERS_H_
 
+#include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
 
-#define LOWERBOUND 9.0  //g-values boundaries for axis detection
-#define UPPERBOUND 10.50
-#define TWOPI 6.2831853072
+// ============================================
+// ORIENTATION ENUMERATION
+// ============================================
+
+enum IMU_Orientation {
+  ORIENTATION_UNKNOWN,
+  ORIENTATION_Z_UP,      // Normal vertical position
+  ORIENTATION_Z_DOWN,    // Upside down
+  ORIENTATION_X_UP,      // Tilted
+  ORIENTATION_X_DOWN,    // Tilted opposite
+  ORIENTATION_Y_UP,      // Tilted sideways
+  ORIENTATION_Y_DOWN,    // Tilted opposite sideways
+  ORIENTATION_TILTED     // Not aligned with any axis
+};
+
+// ============================================
+// ABSTRACT BASE CLASS: IMUSensor
+// ============================================
 
 class IMUSensor {
 public:
   virtual ~IMUSensor() {}
 
-  // Sensor specific functions
-  virtual void init() {}
-  virtual void update() {}
-
-  // Independent functions
-  void reset();
-  //void measureBias();
-  bool tumbled(float minRotation);
-  bool isMoving();
-  bool isNotMoving() {
-    return !isMoving();
-  }
-
-  float getXGravity() const {
-    return _xGravity;
-  }
-  float getYGravity() const {
-    return _yGravity;
-  }
-  float getZGravity() const {
-    return _zGravity;
-  }
-
-protected:
-  virtual void processData(sensors_event_t *event) {}
-  void updateUpVector(double deltaTime);
-
-protected:
-  const float threshold = 1.6; //maximum acceleration to indicate stable
-  const unsigned long stableTime = 200;  //ms)
-
-  unsigned long _prevMicros;
-  unsigned long _lastMovementTime;
-
-  double _xUp, _yUp, _zUp;
-  double _xUpStart, _yUpStart, _zUpStart;
- // double _xGyroBias, _yGyroBias, _zGyroBias;
-
-  float _xGyro, _yGyro, _zGyro;
-  float _xGravity, _yGravity, _zGravity;
-  float _ax, _ay, _az, _magnitude;
-  // float _xRotationMagnitude, _yRotationMagnitude, _zRotationMagnitude;
-
-  bool _isMoving;
+  // ============================================
+  // CORE SENSOR INTERFACE
+  // ============================================
+  
+  // Initialize sensor
+  // Returns true if successful, false if sensor not detected
+  // verbose: Set to true to print initialization progress to Serial
+  virtual bool init(bool verbose = false) = 0;
+  
+  // Must be called regularly to update sensor state
+  virtual void update() = 0;
+  
+  // ============================================
+  // MOTION DETECTION
+  // ============================================
+  
+  // Check if sensor is currently moving
+  virtual bool moving() = 0;
+  
+  // Check if sensor is stable (not moving)
+  virtual bool stable() = 0;
+  
+  // ============================================
+  // ORIENTATION DETECTION
+  // ============================================
+  
+  // Check if sensor is flat on one of its faces (on table)
+  virtual bool on_table() = 0;
+  
+  // Get current orientation
+  virtual IMU_Orientation orientation() = 0;
+  
+  // Get orientation as human-readable string
+  virtual String getOrientationString() = 0;
+  
+  // ============================================
+  // GYROSCOPE
+  // ============================================
+  
+  // Get gyroscope readings in rad/s
+  virtual float gyroX() = 0;
+  virtual float gyroY() = 0;
+  virtual float gyroZ() = 0;
+  
+  // ============================================
+  // ACCELEROMETER
+  // ============================================
+  
+  // Get accelerometer readings in m/s²
+  virtual float accelX() = 0;
+  virtual float accelY() = 0;
+  virtual float accelZ() = 0;
+  
+  // Get total acceleration magnitude
+  virtual float getAccelMagnitude() = 0;
+  
+  // Get acceleration change since last update
+  virtual float getAccelChange() = 0;
+  
+  // ============================================
+  // CALIBRATION
+  // ============================================
+  
+  // Get calibration status (0-3 for each, 3 = fully calibrated)
+  virtual void getCalibration(uint8_t* system, uint8_t* gyro, uint8_t* accel, uint8_t* mag) = 0;
+  
+  // Check if sensor is calibrated
+  virtual bool isCalibrated() = 0;
+  
+  // ============================================
+  // TUMBLE DETECTION
+  // ============================================
+  
+  // Reset tumble detection - starts tracking rotation from current position
+  // Uses gyroscope integration (shake-resistant)
+  virtual void resetTumbleDetection() = 0;
+  
+  // Check if sensor has tumbled beyond threshold since last reset
+  // Returns true if total rotation exceeds threshold
+  virtual bool tumbled() = 0;
+  
+  // Get the total rotation in degrees since reference was set
+  // Uses gyroscope integration for accurate rotation tracking
+  virtual float getTumbleAngle() = 0;
+  
+  // Set tumble detection threshold in degrees (default: 45°)
+  // Common values: 30° (sensitive), 45° (default), 60° (moderate), 90° (loose)
+  virtual void setTumbleThreshold(float degrees) = 0;
+    
+  // ============================================
+  // CONFIGURATION & TUNING
+  // ============================================
+  
+  // Set motion detection threshold (default: 0.5 m/s²)
+  virtual void setMotionThreshold(float threshold) = 0;
+  
+  // Set stability threshold (default: 0.15 m/s²)
+  virtual void setStableThreshold(float threshold) = 0;
+  
+  // Set number of stable samples required (default: 5)
+  virtual void setStableCount(int count) = 0;
+  
+  // Set orientation detection thresholds
+  virtual void setOrientationThresholds(float minGravity, float maxGravity, float maxOtherAxis) = 0;
+  
+  // ============================================
+  // AXIS REMAPPING (BNO055 specific, but in interface for flexibility)
+  // ============================================
+  
+  // Set custom axis remapping
+  virtual void setAxisRemap(uint8_t config, uint8_t sign) = 0;
+  
+  // Get current axis remap configuration
+  virtual void getAxisRemap(uint8_t* config, uint8_t* sign) = 0;
 };
 
-#include <Adafruit_BNO055.h>
-#include <utility/imumaths.h>
+// ============================================
+// CONCRETE CLASS: BNO055IMUSensor
+// ============================================
 
 class BNO055IMUSensor : public IMUSensor {
 public:
-  void init() override;
+  // Constructor
+  BNO055IMUSensor();
+  
+  // ============================================
+  // IMPLEMENTATION OF IMUSensor INTERFACE
+  // ============================================
+  
+  bool init(bool verbose = false) override;
   void update() override;
-  void processData(sensors_event_t *event) override;
+  
+  bool moving() override;
+  bool stable() override;
+  
+  bool on_table() override;
+  IMU_Orientation orientation() override;
+  String getOrientationString() override;
+  
+  float gyroX() override;
+  float gyroY() override;
+  float gyroZ() override;
+  
+  float accelX() override;
+  float accelY() override;
+  float accelZ() override;
+  float getAccelMagnitude() override;
+  float getAccelChange() override;
+  
+  void getCalibration(uint8_t* system, uint8_t* gyro, uint8_t* accel, uint8_t* mag) override;
+  bool isCalibrated() override;
+  
+  void resetTumbleDetection() override;
+  bool tumbled() override;
+  float getTumbleAngle() override;
+  void setTumbleThreshold(float degrees) override;
+  
+  void setMotionThreshold(float threshold) override;
+  void setStableThreshold(float threshold) override;
+  void setStableCount(int count) override;
+  void setOrientationThresholds(float minGravity, float maxGravity, float maxOtherAxis) override;
+  
+  void setAxisRemap(uint8_t config, uint8_t sign) override;
+  void getAxisRemap(uint8_t* config, uint8_t* sign) override;
 
 private:
-  Adafruit_BNO055 _accGyro;
-  void restoreCalibrationData();
-  void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData);
-  void displayCalStatus(void);
+  // BNO055 sensor object
+  Adafruit_BNO055 _bno;
+  
+  // Sensor readings
+  imu::Vector<3> _accel;
+  imu::Vector<3> _gyro;
+  
+  // Motion detection state
+  float _prevAccelMag;
+  float _currentAccelMag;
+  float _accelChange;
+  bool _isMoving;
+  int _stableCounter;
+  
+  // Orientation state
+  IMU_Orientation _currentOrientation;
+  
+  // Thresholds (tunable)
+  float _motionThreshold;
+  float _stableThreshold;
+  int _stableCountRequired;
+  float _flatGravityMin;
+  float _flatGravityMax;
+  float _flatOtherAxisMax;
+  
+  // Axis remap configuration
+  uint8_t _axisRemapConfig;
+  uint8_t _axisRemapSign;
+  
+  // Tumble detection (gyroscope integration)
+  float _integratedRotationX;      // Cumulative rotation around X axis (degrees)
+  float _integratedRotationY;      // Cumulative rotation around Y axis (degrees)
+  float _integratedRotationZ;      // Cumulative rotation around Z axis (degrees)
+  float _totalRotationAngle;       // Total rotation magnitude (degrees)
+  float _tumbleThreshold;          // Threshold in degrees (default: 45°)
+  bool _tumbleDetected;
+  bool _tumbleTrackingActive;
+  unsigned long _lastTumbleUpdateTime;
+  
+  // BNO055 Register addresses
+  static const uint8_t BNO055_OPR_MODE_ADDR = 0x3D;
+  static const uint8_t BNO055_AXIS_MAP_CONFIG_ADDR = 0x41;
+  static const uint8_t BNO055_AXIS_MAP_SIGN_ADDR = 0x42;
+  
+  // Internal helper functions
+  IMU_Orientation detectOrientation();
+  void applyAxisRemap();
+  uint8_t readRegister(uint8_t reg);
+  void writeRegister(uint8_t reg, uint8_t value);
 };
 
 #endif /* IMUHELPERS_H_ */

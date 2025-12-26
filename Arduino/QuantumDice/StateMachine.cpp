@@ -539,8 +539,10 @@ void StateMachine::enterWAITFORTHROW() {
   printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
   delay(100);
   stateEntryTime = millis();
-  stateSelf = currentState;     //all other states are unchanged.
-  _imuSensor->reset();          //prepare for tumbling
+  stateSelf = currentState;            //all other states are unchanged.
+  _imuSensor->resetTumbleDetection();  //prepare for tumbling
+  Serial.print("getTumbleAngleReset: ");
+  Serial.println(_imuSensor->getTumbleAngle());
   longclicked = false;          //prepare for button use
   entangleRequestRcvA = false;  //prepare for
   entangleConfirmRcvB1 = false;
@@ -555,19 +557,18 @@ void StateMachine::enterWAITFORTHROW() {
 void StateMachine::whileWAITFORTHROW() {
   static unsigned long lastBroadcastTimeB1 = 0;
   static unsigned long lastBroadcastTimeB2 = 0;
-
   if (checkMinimumVoltage()) {
     changeState(Trigger::lowbattery);
   } else if (longclicked) {
     longclicked = false;
     changeState(Trigger::buttonPressed);
-  } else if (_imuSensor->tumbled(currentConfig.tumbleConstant)) {  // Use tumble constant from config
+  } else if (_imuSensor->tumbled()) {  //
     changeState(Trigger::startRolling);
   } else if (entangleStopRcv) {  //quit the entanglement
     entangleStopRcv = false;
     changeState(Trigger::entangleStopReceived);
   }
-
+  /*
   //diceA initiates entanglement request, only to dice not entangled to
   if (roleSelf == Roles::ROLE_A) {
     if (diceStateSelf != DiceStates::ENTANGLED_AB1) {  //SINGLE or ENTANGLED_AB2
@@ -620,12 +621,12 @@ void StateMachine::whileWAITFORTHROW() {
     prevDiceStateSelf = diceStateSelf;  //store for the future
     if (diceStateSelf == DiceStates::ENTANGLED_AB1) {
       diceStateSelf = DiceStates::UN_ENTANGLED_AB1;
-    }
-    else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
+    } else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
       diceStateSelf = DiceStates::UN_ENTANGLED_AB2;
     }
     refreshScreens();  //update screens ackordingly
   }
+  */
 }
 
 void StateMachine::enterTHROWING() {
@@ -639,8 +640,9 @@ void StateMachine::enterTHROWING() {
 void StateMachine::whileTHROWING() {
   if (checkMinimumVoltage()) {
     changeState(Trigger::lowbattery);
-  } else if (_imuSensor->isNotMoving() && (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND))) {
-    debugln("isNotMoving triggered and Gravity values are within range");
+  } else if (_imuSensor->stable() && _imuSensor->on_table()) {
+    //  } else if (_imuSensor->isNotMoving() && (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND))) {
+    debugln("stable and on table triggered");
     changeState(Trigger::nonMoving);
   }
   //when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
@@ -649,8 +651,7 @@ void StateMachine::whileTHROWING() {
     prevDiceStateSelf = diceStateSelf;  //store for the future
     if (diceStateSelf == DiceStates::ENTANGLED_AB1) {
       diceStateSelf = DiceStates::UN_ENTANGLED_AB1;
-    }
-    else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
+    } else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
       diceStateSelf = DiceStates::UN_ENTANGLED_AB2;
     }
     refreshScreens();  //update screens ackordingly
@@ -664,156 +665,202 @@ void StateMachine::enterINITMEASURED() {
   delay(100);
   stateEntryTime = millis();
   stateSelf = currentState;
-  if (_imuSensor->isMoving()) {
+  if (_imuSensor->moving()) {
     changeState(Trigger::measurementFail);  //back to throwing state
   }
 
   debug("gravity XYZ: ");
-  debug(_imuSensor->getXGravity());
+  debug(_imuSensor->accelX());
   debug(", ");
-  debug(_imuSensor->getYGravity());
+  debug(_imuSensor->accelY());
   debug(", ");
-  debug(_imuSensor->getZGravity());
+  debug(_imuSensor->accelZ());
   debugln("");
 
-  // Detection algorithm: set measureAxis and which side up?
-  // Use isNano from config instead of compile-time define
-  if (currentConfig.isNano) {
-    // IMU mounted on X+ side (left) - NANO configuration
-    if (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
-      debugln("measureAxisSelf = MeasuredAxises::ZAXIS;");
-      measureAxisSelf = MeasuredAxises::ZAXIS;
-      if (_imuSensor->getXGravity() < 0) upSideSelf = UpSide::Z1;
-      else upSideSelf = UpSide::Z0;
-    } else if (withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
-      debugln("measureAxisSelf = MeasuredAxises::XAXIS;");
-      measureAxisSelf = MeasuredAxises::XAXIS;
-      if (_imuSensor->getYGravity() < 0) upSideSelf = UpSide::X0;
-      else upSideSelf = UpSide::X1;
-    } else if (withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
-      debugln("measureAxisSelf = MeasuredAxises::YAXIS;");
-      measureAxisSelf = MeasuredAxises::YAXIS;
-      if (_imuSensor->getZGravity() < 0) upSideSelf = UpSide::Y0;
-      else upSideSelf = UpSide::Y1;
-    } else {
-      debugln("no clear axis");
-      changeState(Trigger::measurementFail);  //back to throwing state
-    }
-  } else {
-    // IMU mounted on Y- side (rear) - DEVKIT configuration
-    if (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
-      debugln("measureAxisSelf = MeasuredAxises::ZAXIS;");
-      measureAxisSelf = MeasuredAxises::ZAXIS;
-      if (_imuSensor->getXGravity() > 0) upSideSelf = UpSide::Z0;
-      else upSideSelf = UpSide::Z1;
-    } else if (withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
-      debugln("measureAxisSelf = MeasuredAxises::YAXIS;");
-      measureAxisSelf = MeasuredAxises::YAXIS;
-      if (_imuSensor->getYGravity() > 0) upSideSelf = UpSide::Y1;
-      else upSideSelf = UpSide::Y0;
-    } else if (withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
-      debugln("measureAxisSelf = MeasuredAxises::XAXIS;");
-      measureAxisSelf = MeasuredAxises::XAXIS;
-      if (_imuSensor->getZGravity() > 0) upSideSelf = UpSide::X0;
-      else upSideSelf = UpSide::X1;
-    } else {
-      debugln("no clear axis");
-      changeState(Trigger::measurementFail);  //back to throwing state
-    }
-  }
 
-  switch (upSideSelf) {
-    case UpSide::X0:
-      debugln("upside X0");
-      break;
-    case UpSide::X1:
-      debugln("upside X1");
-      break;
-    case UpSide::Y0:
-      debugln("upside Y0");
-      break;
-    case UpSide::Y1:
-      debugln("upside Y1");
-      break;
-    case UpSide::Z0:
+
+  IMU_Orientation orient = _imuSensor->orientation();
+
+  switch (orient) {
+    case ORIENTATION_Z_UP:
+      measureAxisSelf = MeasuredAxises::ZAXIS;
+      upSideSelf = UpSide::Z0;
       debugln("upside Z0");
       break;
-    case UpSide::Z1:
+    case ORIENTATION_Z_DOWN:
+      measureAxisSelf = MeasuredAxises::ZAXIS;
+      upSideSelf = UpSide::Z1;
       debugln("upside Z1");
       break;
+    case ORIENTATION_X_UP:
+      measureAxisSelf = MeasuredAxises::XAXIS;
+      upSideSelf = UpSide::X0;
+      debugln("upside X0");
+      break;
+    case ORIENTATION_X_DOWN:
+      measureAxisSelf = MeasuredAxises::XAXIS;
+      upSideSelf = UpSide::X1;
+      debugln("upside X1");
+      break;
+    case ORIENTATION_Y_UP:
+      measureAxisSelf = MeasuredAxises::YAXIS;
+      upSideSelf = UpSide::Y0;
+      debugln("upside Y0");
+      break;
+    case ORIENTATION_Y_DOWN:
+      measureAxisSelf = MeasuredAxises::YAXIS;
+      upSideSelf = UpSide::Y1;
+      debugln("upside Y1");
+      break;
+    case ORIENTATION_TILTED:
+    case ORIENTATION_UNKNOWN:
+      debugln("no clear axis");
+      changeState(Trigger::measurementFail);  //back to throwing state
+      return;                                 // Stay in current state
   }
 
+
+  /*
+    // Detection algorithm: set measureAxis and which side up?
+    // Use isNano from config instead of compile-time define
+    if (currentConfig.isNano) {
+      // IMU mounted on X+ side (left) - NANO configuration
+      if (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
+        debugln("measureAxisSelf = MeasuredAxises::ZAXIS;");
+        measureAxisSelf = MeasuredAxises::ZAXIS;
+        if (_imuSensor->getXGravity() < 0) upSideSelf = UpSide::Z1;
+        else upSideSelf = UpSide::Z0;
+      } else if (withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
+        debugln("measureAxisSelf = MeasuredAxises::XAXIS;");
+        measureAxisSelf = MeasuredAxises::XAXIS;
+        if (_imuSensor->getYGravity() < 0) upSideSelf = UpSide::X0;
+        else upSideSelf = UpSide::X1;
+      } else if (withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
+        debugln("measureAxisSelf = MeasuredAxises::YAXIS;");
+        measureAxisSelf = MeasuredAxises::YAXIS;
+        if (_imuSensor->getZGravity() < 0) upSideSelf = UpSide::Y0;
+        else upSideSelf = UpSide::Y1;
+      } else {
+        debugln("no clear axis");
+        changeState(Trigger::measurementFail);  //back to throwing state
+      }
+    } else {
+      // IMU mounted on Y- side (rear) - DEVKIT configuration
+      if (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
+        debugln("measureAxisSelf = MeasuredAxises::ZAXIS;");
+        measureAxisSelf = MeasuredAxises::ZAXIS;
+        if (_imuSensor->getXGravity() > 0) upSideSelf = UpSide::Z0;
+        else upSideSelf = UpSide::Z1;
+      } else if (withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
+        debugln("measureAxisSelf = MeasuredAxises::YAXIS;");
+        measureAxisSelf = MeasuredAxises::YAXIS;
+        if (_imuSensor->getYGravity() > 0) upSideSelf = UpSide::Y1;
+        else upSideSelf = UpSide::Y0;
+      } else if (withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
+        debugln("measureAxisSelf = MeasuredAxises::XAXIS;");
+        measureAxisSelf = MeasuredAxises::XAXIS;
+        if (_imuSensor->getZGravity() > 0) upSideSelf = UpSide::X0;
+        else upSideSelf = UpSide::X1;
+      } else {
+        debugln("no clear axis");
+        changeState(Trigger::measurementFail);  //back to throwing state
+      }
+    }
+
+    switch (upSideSelf) {
+      case UpSide::X0:
+        debugln("upside X0");
+        break;
+      case UpSide::X1:
+        debugln("upside X1");
+        break;
+      case UpSide::Y0:
+        debugln("upside Y0");
+        break;
+      case UpSide::Y1:
+        debugln("upside Y1");
+        break;
+      case UpSide::Z0:
+        debugln("upside Z0");
+        break;
+      case UpSide::Z1:
+        debugln("upside Z1");
+        break;
+    }
+*/
   // The secret sauce to set diceNumber on top
-switch (diceStateSelf) {
-  case DiceStates::SINGLE:
-    debugln("single state secret sauce");
-    diceNumberSelf = selectOneToSix();
-    break;
-
-  case DiceStates::MEASURED:  // 2 options: same measureAxisSelf or different measureAxis
-    debugln("measured state secret sauce");
-    if (measureAxisSelf != prevMeasureAxisSelf) {  // different, generate random upNumber
-      debugln("measured state. different axis");
+  switch (diceStateSelf) {
+    case DiceStates::SINGLE:
+      debugln("single state secret sauce");
       diceNumberSelf = selectOneToSix();
-    } else {  // same axis
-      debugln("measured state. same axis. do nothing: ");
-      // nothing to do - diceNumberSelf is already set and will be put on top
-    }
-    break;
+      break;
 
-  case DiceStates::ENTANGLED_AB1:
-  case DiceStates::UN_ENTANGLED_AB1: {
-    debugln("entang AB1 secret sauce");
-    // Determine dice number based on config and sister state
-    if (currentConfig.alwaysSeven) {
-      diceNumberSelf = (measureAxisSister != MeasuredAxises::UNDEFINED) 
-        ? selectOppositeOneToSix(diceNumberSister)
-        : selectOneToSix();
-      debugln((measureAxisSister != MeasuredAxises::UNDEFINED) ? "sister ready. always seven mode" : "different axis");
-    } else {
-      diceNumberSelf = (measureAxisSelf == measureAxisSister)
-        ? selectOppositeOneToSix(diceNumberSister)
-        : selectOneToSix();
-      debugln((measureAxisSelf == measureAxisSister) ? "sister ready. same axis" : "different axis");
-    }
-    // Send measurements to the opponent dice
-    Roles targetRole = (roleSelf == Roles::ROLE_A) ? roleB1 : roleA;
-    sendMeasurements(targetRole, stateSelf, DiceStates::MEASURED, diceNumberSelf, upSideSelf, measureAxisSelf);
-    break;
+    case DiceStates::MEASURED:  // 2 options: same measureAxisSelf or different measureAxis
+      debugln("measured state secret sauce");
+      if (measureAxisSelf != prevMeasureAxisSelf) {  // different, generate random upNumber
+        debugln("measured state. different axis");
+        diceNumberSelf = selectOneToSix();
+      } else {  // same axis
+        debugln("measured state. same axis. do nothing: ");
+        // nothing to do - diceNumberSelf is already set and will be put on top
+      }
+      break;
+
+    case DiceStates::ENTANGLED_AB1:
+    case DiceStates::UN_ENTANGLED_AB1:
+      {
+        debugln("entang AB1 secret sauce");
+        // Determine dice number based on config and sister state
+        if (currentConfig.alwaysSeven) {
+          diceNumberSelf = (measureAxisSister != MeasuredAxises::UNDEFINED)
+                             ? selectOppositeOneToSix(diceNumberSister)
+                             : selectOneToSix();
+          debugln((measureAxisSister != MeasuredAxises::UNDEFINED) ? "sister ready. always seven mode" : "different axis");
+        } else {
+          diceNumberSelf = (measureAxisSelf == measureAxisSister)
+                             ? selectOppositeOneToSix(diceNumberSister)
+                             : selectOneToSix();
+          debugln((measureAxisSelf == measureAxisSister) ? "sister ready. same axis" : "different axis");
+        }
+        // Send measurements to the opponent dice
+        Roles targetRole = (roleSelf == Roles::ROLE_A) ? roleB1 : roleA;
+        sendMeasurements(targetRole, stateSelf, DiceStates::MEASURED, diceNumberSelf, upSideSelf, measureAxisSelf);
+        break;
+      }
+
+    case DiceStates::ENTANGLED_AB2:
+    case DiceStates::UN_ENTANGLED_AB2:
+      {
+        debugln("entang AB2 secret sauce");
+        // Determine dice number based on config and sister state
+        if (currentConfig.alwaysSeven) {
+          diceNumberSelf = (measureAxisSister != MeasuredAxises::UNDEFINED)
+                             ? selectOppositeOneToSix(diceNumberSister)
+                             : selectOneToSix();
+          debugln((measureAxisSister != MeasuredAxises::UNDEFINED) ? "sister ready. always seven mode" : "different axis");
+        } else {
+          diceNumberSelf = (measureAxisSelf == measureAxisSister)
+                             ? selectOppositeOneToSix(diceNumberSister)
+                             : selectOneToSix();
+          debugln((measureAxisSelf == measureAxisSister) ? "sister ready. same axis" : "different axis");
+        }
+        // Send measurements to the opponent dice
+        Roles targetRole = (roleSelf == Roles::ROLE_A) ? roleB2 : roleA;
+        sendMeasurements(targetRole, stateSelf, DiceStates::MEASURED, diceNumberSelf, upSideSelf, measureAxisSelf);
+        break;
+      }
+
+    case DiceStates::MEASURED_AFTER_ENT:  // 2 options: no sister diceNumber or with diceNumber
+      debugln("measured after entang secret sauce");
+      if (diceNumberSister == DiceNumbers::NONE) {  // different, generate random upNumber
+        debugln("no diceNumberSister");
+        diceNumberSelf = selectOneToSix();
+      } else {
+        debugln("defined diceNumberSister");
+        diceNumberSelf = diceNumberSister;
+      }
+      break;
   }
-
-  case DiceStates::ENTANGLED_AB2:
-  case DiceStates::UN_ENTANGLED_AB2: {
-    debugln("entang AB2 secret sauce");
-    // Determine dice number based on config and sister state
-    if (currentConfig.alwaysSeven) {
-      diceNumberSelf = (measureAxisSister != MeasuredAxises::UNDEFINED)
-        ? selectOppositeOneToSix(diceNumberSister)
-        : selectOneToSix();
-      debugln((measureAxisSister != MeasuredAxises::UNDEFINED) ? "sister ready. always seven mode" : "different axis");
-    } else {
-      diceNumberSelf = (measureAxisSelf == measureAxisSister)
-        ? selectOppositeOneToSix(diceNumberSister)
-        : selectOneToSix();
-      debugln((measureAxisSelf == measureAxisSister) ? "sister ready. same axis" : "different axis");
-    }
-    // Send measurements to the opponent dice
-    Roles targetRole = (roleSelf == Roles::ROLE_A) ? roleB2 : roleA;
-    sendMeasurements(targetRole, stateSelf, DiceStates::MEASURED, diceNumberSelf, upSideSelf, measureAxisSelf);
-    break;
-  }
-
-  case DiceStates::MEASURED_AFTER_ENT:  // 2 options: no sister diceNumber or with diceNumber
-    debugln("measured after entang secret sauce");
-    if (diceNumberSister == DiceNumbers::NONE) {  // different, generate random upNumber
-      debugln("no diceNumberSister");
-      diceNumberSelf = selectOneToSix();
-    } else {
-      debugln("defined diceNumberSister");
-      diceNumberSelf = diceNumberSister;
-    }
-    break;
-}
 
   prevMeasureAxisSelf = measureAxisSelf;
   prevUpSideSelf = upSideSelf;           // preserve for the history
@@ -863,7 +910,8 @@ void StateMachine::enterCLASSIC_STATE() {
 void StateMachine::whileCLASSIC_STATE() {
   if (checkMinimumVoltage()) {
     changeState(Trigger::lowbattery);
-  } else if (longclicked) {
+    //  } else if (longclicked) {
+  } else if (true) {
     longclicked = false;
     changeState(Trigger::buttonPressed);
   }

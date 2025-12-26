@@ -325,7 +325,7 @@ void checkTimeForDeepSleep(IMUSensor* imuSensor) {
   static bool isMoving = false;
   static unsigned long lastMovementTime = 0;
 
-  if (imuSensor->isNotMoving()) {
+  if (imuSensor->stable()) {
     if (isMoving) {
       lastMovementTime = millis();
       isMoving = false;
