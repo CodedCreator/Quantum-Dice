@@ -94,7 +94,9 @@ public:
   // GYROSCOPE
   // ============================================
   
-  // Get gyroscope readings in rad/s
+  // Get gyroscope readings in deg/s (as output by BNO055)
+  // NOTE: These return raw sensor values in degrees per second
+  // Conversion to rad/s happens internally in updateUpVector()
   virtual float gyroX() = 0;
   virtual float gyroY() = 0;
   virtual float gyroZ() = 0;
@@ -128,21 +130,42 @@ public:
   // TUMBLE DETECTION
   // ============================================
   
-  // Reset tumble detection - starts tracking rotation from current position
-  // Uses gyroscope integration (shake-resistant)
+  // Reset tumble detection - captures current "up" direction as reference
+  // Uses gravity vector to determine initial orientation
+  // Can be called with sensor in ANY orientation
   virtual void resetTumbleDetection() = 0;
   
   // Check if sensor has tumbled beyond threshold since last reset
-  // Returns true if total rotation exceeds threshold
+  // Uses rotation matrices to track orientation change
+  // Insensitive to rotation around the vertical axis (spinning on table)
+  // Only detects actual rolling motion
   virtual bool tumbled() = 0;
   
-  // Get the total rotation in degrees since reference was set
-  // Uses gyroscope integration for accurate rotation tracking
+  // Get the rotation angle in degrees since reference was set
+  // Calculated from dot product between current and initial up vectors
   virtual float getTumbleAngle() = 0;
   
-  // Set tumble detection threshold in degrees (default: 45°)
-  // Common values: 30° (sensitive), 45° (default), 60° (moderate), 90° (loose)
-  virtual void setTumbleThreshold(float degrees) = 0;
+  // Set tumble detection threshold (cosine of angle, default: 0.707 = 45°)
+  // Common values: 0.866 (30°), 0.707 (45°), 0.5 (60°), 0.0 (90°)
+  // Threshold represents cos(angle), where angle is the rotation threshold
+  virtual void setTumbleThreshold(float threshold) = 0;
+  
+  // ============================================
+  // DEBUG FUNCTIONS
+  // ============================================
+  
+  // Get the current dot product (for debugging)
+  // Returns value between -1.0 and 1.0
+  virtual float getDebugDotProduct() = 0;
+  
+  // Get the current "up" vector (for debugging)
+  virtual void getDebugUpVector(float* x, float* y, float* z) = 0;
+  
+  // Get the reference "up" vector (for debugging)
+  virtual void getDebugUpStart(float* x, float* y, float* z) = 0;
+  
+  // Print comprehensive debug info to Serial
+  virtual void printDebugInfo() = 0;
     
   // ============================================
   // CONFIGURATION & TUNING
@@ -210,7 +233,12 @@ public:
   void resetTumbleDetection() override;
   bool tumbled() override;
   float getTumbleAngle() override;
-  void setTumbleThreshold(float degrees) override;
+  void setTumbleThreshold(float threshold) override;
+  
+  float getDebugDotProduct() override;
+  void getDebugUpVector(float* x, float* y, float* z) override;
+  void getDebugUpStart(float* x, float* y, float* z) override;
+  void printDebugInfo() override;
   
   void setMotionThreshold(float threshold) override;
   void setStableThreshold(float threshold) override;
@@ -250,15 +278,18 @@ private:
   uint8_t _axisRemapConfig;
   uint8_t _axisRemapSign;
   
-  // Tumble detection (gyroscope integration)
-  float _integratedRotationX;      // Cumulative rotation around X axis (degrees)
-  float _integratedRotationY;      // Cumulative rotation around Y axis (degrees)
-  float _integratedRotationZ;      // Cumulative rotation around Z axis (degrees)
-  float _totalRotationAngle;       // Total rotation magnitude (degrees)
-  float _tumbleThreshold;          // Threshold in degrees (default: 45°)
+  // Tumble detection (rotation matrix-based)
+  float _xUp;                      // Current "up" vector (updated by rotation matrices)
+  float _yUp;
+  float _zUp;
+  float _xUpStart;                 // Initial reference "up" vector
+  float _yUpStart;
+  float _zUpStart;
+  unsigned long _prevMicros;       // For delta time calculation
+  float _tumbleThreshold;          // Threshold as cosine of angle (default: 0.707 = 45°)
   bool _tumbleDetected;
-  bool _tumbleTrackingActive;
-  unsigned long _lastTumbleUpdateTime;
+  bool _tumbleReferenceSet;
+  bool _firstUpdateAfterReset;     // Flag to skip first update with bad deltaTime
   
   // BNO055 Register addresses
   static const uint8_t BNO055_OPR_MODE_ADDR = 0x3D;
@@ -270,6 +301,7 @@ private:
   void applyAxisRemap();
   uint8_t readRegister(uint8_t reg);
   void writeRegister(uint8_t reg, uint8_t value);
+  void updateUpVector(float deltaTime);  // Apply rotation matrices
 };
 
 #endif /* IMUHELPERS_H_ */

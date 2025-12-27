@@ -20,17 +20,20 @@ BNO055IMUSensor::BNO055IMUSensor() : _bno(55) {
   
   // Default axis remap: X↔Z swap with Y unchanged
   _axisRemapConfig = 0x06;       // Z gets X, Y gets Y, X gets Z
-  _axisRemapSign = 0x06;         // Sign configuration
+  _axisRemapSign = 0x01;         // Sign configuration 0x06
   
-  // Initialize tumble detection (gyroscope integration)
-  _integratedRotationX = 0.0;
-  _integratedRotationY = 0.0;
-  _integratedRotationZ = 0.0;
-  _totalRotationAngle = 0.0;
-  _tumbleThreshold = 45.0;       // 45 degrees by default
+  // Initialize tumble detection (rotation matrix-based)
+  _xUp = 0.0;
+  _yUp = 0.0;
+  _zUp = 1.0;                    // Default to Z-up
+  _xUpStart = 0.0;
+  _yUpStart = 0.0;
+  _zUpStart = 1.0;
+  _prevMicros = 0;
+  _tumbleThreshold = 0.707;      // cos(45°) by default
   _tumbleDetected = false;
-  _tumbleTrackingActive = false;
-  _lastTumbleUpdateTime = 0;
+  _tumbleReferenceSet = false;
+  _firstUpdateAfterReset = false;
   
   // Initialize state
   _prevAccelMag = 0;
@@ -126,6 +129,11 @@ bool BNO055IMUSensor::init(bool verbose) {
 }
 
 void BNO055IMUSensor::update() {
+  // Calculate delta time for rotation matrices
+  unsigned long currentMicros = micros();
+  float deltaTime = (currentMicros - _prevMicros) * 1e-6;  // Convert to seconds
+  _prevMicros = currentMicros;
+  
   // Read sensor data
   _accel = _bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
   _gyro = _bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
@@ -159,35 +167,24 @@ void BNO055IMUSensor::update() {
   // Detect orientation
   _currentOrientation = detectOrientation();
   
-  // Tumble detection (gyroscope integration)
-  if (_tumbleTrackingActive) {
-    unsigned long currentTime = millis();
-    
-    // Calculate time delta in seconds
-    float dt = (currentTime - _lastTumbleUpdateTime) / 1000.0;
-    _lastTumbleUpdateTime = currentTime;
-    
-    // Only integrate if time delta is reasonable (< 1 second)
-    // This avoids huge jumps if update() is called irregularly
-    if (dt > 0 && dt < 1.0) {
-      // Integrate gyroscope readings (rad/s * seconds = radians)
-      // Convert to degrees: radians * 57.2958 = degrees
-      float deltaX = _gyro.x() * dt * 57.2958;
-      float deltaY = _gyro.y() * dt * 57.2958;
-      float deltaZ = _gyro.z() * dt * 57.2958;
+  // Update up vector using rotation matrices (if reference is set)
+  if (_tumbleReferenceSet) {
+    // Skip first update after reset to avoid bad deltaTime
+    if (_firstUpdateAfterReset) {
+      _firstUpdateAfterReset = false;
+      _prevMicros = currentMicros;  // Reset timing
+    }
+    else if (deltaTime > 0.0 && deltaTime < 1.0) {
+      updateUpVector(deltaTime);
       
-      // Accumulate rotation angles
-      _integratedRotationX += fabs(deltaX);
-      _integratedRotationY += fabs(deltaY);
-      _integratedRotationZ += fabs(deltaZ);
+      // Check for tumble by comparing current up vector with initial reference
+      float dotProduct = _xUp * _xUpStart + _yUp * _yUpStart + _zUp * _zUpStart;
       
-      // Calculate total rotation magnitude (Euclidean norm)
-      _totalRotationAngle = sqrt(_integratedRotationX * _integratedRotationX +
-                                  _integratedRotationY * _integratedRotationY +
-                                  _integratedRotationZ * _integratedRotationZ);
+      // Clamp to valid range for acos
+      dotProduct = constrain(dotProduct, -1.0, 1.0);
       
       // Check if tumbled beyond threshold
-      if (_totalRotationAngle >= _tumbleThreshold) {
+      if (dotProduct < _tumbleThreshold) {
         _tumbleDetected = true;
       }
     }
@@ -303,16 +300,32 @@ bool BNO055IMUSensor::isCalibrated() {
 // ============================================
 
 void BNO055IMUSensor::resetTumbleDetection() {
-  // Reset integrated rotation values
-  _integratedRotationX = 0.0;
-  _integratedRotationY = 0.0;
-  _integratedRotationZ = 0.0;
-  _totalRotationAngle = 0.0;
+  // Get current acceleration (gravity) vector
+  _accel = _bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
   
-  // Reset detection state
-  _tumbleDetected = false;
-  _tumbleTrackingActive = true;
-  _lastTumbleUpdateTime = millis();
+  // Calculate magnitude
+  float mag = sqrt(_accel.x()*_accel.x() + _accel.y()*_accel.y() + _accel.z()*_accel.z());
+  
+  // Normalize to unit vector (invert because gravity points down, we want "up")
+  // Avoid division by zero
+  if (mag > 0.1) {
+    _xUpStart = -_accel.x() / mag;
+    _yUpStart = -_accel.y() / mag;
+    _zUpStart = -_accel.z() / mag;
+    
+    // Initialize current up vector to same as start
+    _xUp = _xUpStart;
+    _yUp = _yUpStart;
+    _zUp = _zUpStart;
+    
+    // Reset timing
+    _prevMicros = micros();
+    
+    // Clear detection flags
+    _tumbleDetected = false;
+    _tumbleReferenceSet = true;
+    _firstUpdateAfterReset = true;  // Skip first update to avoid bad deltaTime
+  }
 }
 
 bool BNO055IMUSensor::tumbled() {
@@ -320,7 +333,21 @@ bool BNO055IMUSensor::tumbled() {
 }
 
 float BNO055IMUSensor::getTumbleAngle() {
-  return _totalRotationAngle;
+  if (!_tumbleReferenceSet) {
+    return 0.0;  // No reference set
+  }
+  
+  // Calculate dot product between current and initial up vectors
+  float dotProduct = _xUp * _xUpStart + _yUp * _yUpStart + _zUp * _zUpStart;
+  
+  // Clamp to valid range for acos
+  dotProduct = constrain(dotProduct, -1.0, 1.0);
+  
+  // Convert to angle in degrees
+  float angleRadians = acos(dotProduct);
+  float angleDegrees = angleRadians * 57.2958;  // 180/PI
+  
+  return angleDegrees;
 }
 
 // ============================================
@@ -340,7 +367,7 @@ void BNO055IMUSensor::setStableCount(int count) {
 }
 
 void BNO055IMUSensor::setTumbleThreshold(float threshold) {
-  _tumbleThreshold = threshold;  // Threshold is now in degrees
+  _tumbleThreshold = threshold;  // Threshold is cosine of angle
   // Reset tumble detection when threshold changes
   _tumbleDetected = false;
 }
@@ -436,4 +463,113 @@ void BNO055IMUSensor::writeRegister(uint8_t reg, uint8_t value) {
   Wire.write(value);
   Wire.endTransmission();
   delay(2);
+}
+
+// ============================================
+// TUMBLE DETECTION - ROTATION MATRIX UPDATE
+// ============================================
+
+void BNO055IMUSensor::updateUpVector(float deltaTime) {
+  // BNO055 outputs gyroscope in DEGREES per second, not radians!
+  // Convert to radians per second, then calculate rotation angles
+  
+  float xRot = _gyro.x() * DEG_TO_RAD * deltaTime;
+  float yRot = _gyro.y() * DEG_TO_RAD * deltaTime;
+  float zRot = _gyro.z() * DEG_TO_RAD * deltaTime;
+  
+  // Apply rotation matrices sequentially: X, then Y, then Z
+  // This updates the current "up" vector based on the rotation
+  
+  // X-axis rotation matrix
+  // Rotates around X-axis, affects Y and Z components
+  float xUp = _xUp;
+  float yUp = _yUp * cos(xRot) - _zUp * sin(xRot);
+  float zUp = _yUp * sin(xRot) + _zUp * cos(xRot);
+  
+  _xUp = xUp;
+  _yUp = yUp;
+  _zUp = zUp;
+  
+  // Y-axis rotation matrix
+  // Rotates around Y-axis, affects X and Z components
+  xUp = _xUp * cos(yRot) + _zUp * sin(yRot);
+  yUp = _yUp;
+  zUp = -_xUp * sin(yRot) + _zUp * cos(yRot);
+  
+  _xUp = xUp;
+  _yUp = yUp;
+  _zUp = zUp;
+  
+  // Z-axis rotation matrix
+  // Rotates around Z-axis, affects X and Y components
+  xUp = _xUp * cos(zRot) - _yUp * sin(zRot);
+  yUp = _xUp * sin(zRot) + _yUp * cos(zRot);
+  zUp = _zUp;
+  
+  _xUp = xUp;
+  _yUp = yUp;
+  _zUp = zUp;
+  
+  // Calculate magnitude before normalization
+  float magnitude = sqrt(_xUp * _xUp + _yUp * _yUp + _zUp * _zUp);
+  
+  // CRITICAL: Renormalize the up vector to prevent drift
+  // Floating-point errors accumulate, causing magnitude to drift from 1.0
+  // This would make dot product calculations unreliable
+  if (magnitude > 0.01) {  // Avoid division by zero
+    _xUp /= magnitude;
+    _yUp /= magnitude;
+    _zUp /= magnitude;
+  }
+}
+
+// ============================================
+// DEBUG FUNCTIONS
+// ============================================
+
+float BNO055IMUSensor::getDebugDotProduct() {
+  if (!_tumbleReferenceSet) {
+    return 1.0;  // No reference set, return 1.0
+  }
+  
+  float dotProduct = _xUp * _xUpStart + _yUp * _yUpStart + _zUp * _zUpStart;
+  return constrain(dotProduct, -1.0, 1.0);
+}
+
+void BNO055IMUSensor::getDebugUpVector(float* x, float* y, float* z) {
+  *x = _xUp;
+  *y = _yUp;
+  *z = _zUp;
+}
+
+void BNO055IMUSensor::getDebugUpStart(float* x, float* y, float* z) {
+  *x = _xUpStart;
+  *y = _yUpStart;
+  *z = _zUpStart;
+}
+
+void BNO055IMUSensor::printDebugInfo() {
+  Serial.print("UpStart:(");
+  Serial.print(_xUpStart, 4);
+  Serial.print(", ");
+  Serial.print(_yUpStart, 4);
+  Serial.print(", ");
+  Serial.print(_zUpStart, 4);
+  Serial.print(") | Up:(");
+  Serial.print(_xUp, 4);
+  Serial.print(", ");
+  Serial.print(_yUp, 4);
+  Serial.print(", ");
+  Serial.print(_zUp, 4);
+  Serial.print(") | Gyro:(");
+  Serial.print(_gyro.x(), 4);
+  Serial.print(", ");
+  Serial.print(_gyro.y(), 4);
+  Serial.print(", ");
+  Serial.print(_gyro.z(), 4);
+  Serial.print(") | Dot:");
+  Serial.print(getDebugDotProduct(), 4);
+  Serial.print(" | Angle:");
+  Serial.print(getTumbleAngle(), 2);
+  Serial.println("°");
 }

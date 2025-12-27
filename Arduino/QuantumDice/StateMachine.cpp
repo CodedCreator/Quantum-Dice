@@ -677,7 +677,7 @@ void StateMachine::enterINITMEASURED() {
   debug(_imuSensor->accelZ());
   debugln("");
 
-
+  debugln(_imuSensor->getOrientationString());
 
   IMU_Orientation orient = _imuSensor->orientation();
 
@@ -685,32 +685,32 @@ void StateMachine::enterINITMEASURED() {
     case ORIENTATION_Z_UP:
       measureAxisSelf = MeasuredAxises::ZAXIS;
       upSideSelf = UpSide::Z0;
-      debugln("upside Z0");
+      debugln("upside Z+");
       break;
     case ORIENTATION_Z_DOWN:
       measureAxisSelf = MeasuredAxises::ZAXIS;
       upSideSelf = UpSide::Z1;
-      debugln("upside Z1");
+      debugln("upside Z-");
       break;
     case ORIENTATION_X_UP:
       measureAxisSelf = MeasuredAxises::XAXIS;
       upSideSelf = UpSide::X0;
-      debugln("upside X0");
+      debugln("upside X+");
       break;
     case ORIENTATION_X_DOWN:
       measureAxisSelf = MeasuredAxises::XAXIS;
       upSideSelf = UpSide::X1;
-      debugln("upside X1");
+      debugln("upside X-");
       break;
     case ORIENTATION_Y_UP:
       measureAxisSelf = MeasuredAxises::YAXIS;
       upSideSelf = UpSide::Y0;
-      debugln("upside Y0");
+      debugln("upside Y+");
       break;
     case ORIENTATION_Y_DOWN:
       measureAxisSelf = MeasuredAxises::YAXIS;
       upSideSelf = UpSide::Y1;
-      debugln("upside Y1");
+      debugln("upside Y-");
       break;
     case ORIENTATION_TILTED:
     case ORIENTATION_UNKNOWN:
