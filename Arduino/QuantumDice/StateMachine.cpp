@@ -910,8 +910,7 @@ void StateMachine::enterCLASSIC_STATE() {
 void StateMachine::whileCLASSIC_STATE() {
   if (checkMinimumVoltage()) {
     changeState(Trigger::lowbattery);
-    //  } else if (longclicked) {
-  } else if (true) {
+  } else if (longclicked) {
     longclicked = false;
     changeState(Trigger::buttonPressed);
   }
