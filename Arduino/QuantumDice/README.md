@@ -34,25 +34,29 @@ This guide provides step-by-step instructions for programming and configuring th
 The QuantumDice is built on an **ESP32-S3 N16R8 module** and includes several key components:
 
 **Display System:**
+
 - Six round TFT displays with SPI interface
 - Each display controlled via individual CS-pin connected to a digital port
 
 **Sensors and Components:**
-- **BNO055 IMU sensor**: Measures rotation and position of the dice
-- **ATECC508A cryptographic chip**: Provides true random number generation
-- Both sensors communicate via I2C protocol
+
+- **BNO055 IMU sensor**: Measures rotation and position of the dice. I2C protocol.
+- ESP32 random generator
 - Push button for user input
 - Battery voltage monitoring system
 
 **Communication:**
+
 - ESP-NOW protocol enables peer-to-peer communication between paired dice
 - Each dice stores the MAC addresses of its paired partners
 
 **Data Storage:**
-- Configuration and calibration data stored in EEPROM
+
+- Configuration data stored in EEPROM
 - Must be configured before first use using the separate QuantumDiceInitTool sketch
 
 **Reference Documentation:**
+
 - [ESP32-S3 N16R8 Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf)
 - [BNO055 IMU Datasheet](https://nl.mouser.com/datasheet/3/1046/1/bst-bno055-ds000.pdf)
 - [ATECC508A Datasheet](https://cdn.sparkfun.com/assets/learn_tutorials/1/0/0/3/Microchip_ATECC508A_Datasheet.pdf)
@@ -70,9 +74,11 @@ Download and install the latest version of [Arduino IDE 2.x](https://docs.arduin
 1. Open Arduino IDE
 2. Navigate to **File > Preferences**
 3. In the "Additional Boards Manager URLs" field, add:
+
    ```
    https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
    ```
+
 4. Click **OK** to save
 5. Go to **Tools > Board > Boards Manager**
 6. Search for "ESP32"
@@ -102,7 +108,6 @@ Install the following libraries via **Tools > Manage Libraries**:
 - Adafruit Unified Sensor
 - Adafruit GFX
 - Adafruit GC9A01A
-- SparkFun ATECCX08A
 - Button2
 
 Your Arduino IDE is now ready for QuantumDice development.
@@ -112,6 +117,7 @@ Your Arduino IDE is now ready for QuantumDice development.
 ## 4. First Time Setup
 
 When connecting a fresh ESP32-S3 module (ESP32-S3N16R8) to Arduino IDE for the first time, you may see continuous reboot messages in the Serial monitor:
+
 ```
 invalid header: 0xffffffff
 invalid header: 0xffffffff
@@ -130,7 +136,6 @@ This is **completely normal** for a fresh module from the supplier. Here's what'
 - **Bootloop** - The module continuously resets because there's no program to run
 
 The ESP32-S3 module has never been programmed and needs its first firmware upload.
-
 
 ### 4.1 Initial Upload - Blink Test
 
@@ -176,14 +181,11 @@ The Blink sketch is now running (though the LED may not be visible on this board
 
 **After this initial upload, future uploads will not require the BOOT button procedure.**
 
-
 ### 4.2 Board Configuration
 
 If your ProcessorBoard has never been configured, you must complete these steps using the **QuantumDiceInitTool.ino** sketch:
 
 - Obtain the board's MAC address
-- Lock the ATECC508A cryptographic chip (required before use)
-- Calibrate the BNO055 IMU sensor and save calibration to EEPROM
 - Configure QuantumDice settings and save to EEPROM
 
 Refer to the QuantumDiceInitTool README for detailed instructions on this configuration process.
@@ -222,6 +224,7 @@ After uploading, open the **Serial Monitor** (baud rate: **115200**) to view deb
 **Expected Startup Sequence:**
 
 The Serial Monitor will display:
+
 - EEPROM initialization and memory map
 - Loaded configuration (Dice ID, MAC addresses, colors, timing constants)
 - Hardware pin configuration
@@ -260,17 +263,20 @@ If you see "System not calibrated" warnings, don't worry—this is normal during
 ## Troubleshooting
 
 **Upload fails:**
+
 - Ensure BOOT button procedure was followed for first-time uploads
 - Check USB cable connection and try a different cable
 - Verify correct COM port is selected
 - Confirm 4-wire power cable is disconnected
 
 **Sensor errors:**
+
 - Check I2C connections
 - Verify sensors are properly seated
 - Run the QuantumDiceInitTool if calibration data is missing
 
 **Display issues:**
+
 - Ensure FPC cables are properly connected
 - Check CS pin assignments in code match your hardware version
 
