@@ -906,7 +906,7 @@
                 
                 // Write firmware
                 await esploader.writeFlash({
-                    fileArray: [{ data: binaryString, address: 0x0 }],
+                    fileArray: [{ data: binaryString, address: 0x10000 }],
                     flashSize: "keep",
                     eraseAll: false,
                     compress: true,
