@@ -11,6 +11,7 @@
 #include "Screenfunctions.h"
 #include "handyHelpers.h"
 #include "StateMachine.h"
+#include "DiceConfigManager.h"
 
 StateMachine stateMachine;
 
@@ -25,25 +26,21 @@ void setup() {
   // Initialize serial for debugging
   initSerial();  // delay(1000) included
 
-  // Initialize EEPROM ONCE for both config and IMU calibration
-  initEEPROM();
-
-  // Load dice configuration from EEPROM
-  // This MUST be done early because it initializes hwPins which are needed for displays
-  if (!loadConfigFromEEPROM()) {
-    Serial.println("FATAL ERROR: Cannot load configuration!");
-    Serial.println("Please flash configuration using the setup sketch.");
-    // Halt execution - can't proceed without valid configuration
-    while (1) {
-      delay(1000);
-    }
-  }
-
   // Print version and configuration info
   Serial.println("\n" __FILE__ " " __DATE__ " " __TIME__);
   Serial.print("FW: ");
   Serial.print(VERSION);
-  Serial.print(" - Dice ID: ");
+
+  // Load config
+  if (!loadGlobalConfig(true)) {
+    Serial.println("Config failed!");
+  }
+  printGlobalConfig();
+
+  // intitialise the hardware pins and display addresses
+  initHardwarePins();
+
+  Serial.print("Dice ID: ");
   Serial.println(currentConfig.diceId);  // Use diceId from config
   Serial.print("Board type: ");
   Serial.println(currentConfig.isNano ? "NANO" : "DEVKIT");  // Use config instead of defines
@@ -54,16 +51,13 @@ void setup() {
   // Show startup logo during setup
   displayQLab(ALL);
 
-
   // Initialize IMU sensor
-  // This still works exactly the same
   IMUSensor *imuSensor;
   imuSensor = new BNO055IMUSensor();
   if (!imuSensor->init(true)) {  // Show initialization progress
     Serial.println("Failed to initialize sensor!");
   }
   if (currentConfig.isNano) imuSensor->setAxisRemap(0x06, 0x06);  //to be adapted.
-  //imuSensor->setTumbleThreshold(currentConfig.tumbleConstant);    //0.2
 
   imuSensor->update();
   imuSensor->resetTumbleDetection();

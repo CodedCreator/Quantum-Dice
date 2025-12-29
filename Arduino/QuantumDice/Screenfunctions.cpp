@@ -3,6 +3,7 @@
 #include "Version.h"
 #include "IMUhelpers.h"
 #include "handyHelpers.h"
+#include "DiceConfigManager.h"
 #include "defines.h"
 #include "ScreenStateDefs.h"
 #include "ImageLibrary/ImageLibrary.h"

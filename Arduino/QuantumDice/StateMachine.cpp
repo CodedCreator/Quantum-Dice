@@ -2,6 +2,7 @@
 #include "defines.h"
 #include "ScreenStateDefs.h"
 #include "handyHelpers.h"
+#include "DiceConfigManager.h"
 #include "IMUhelpers.h"
 #include "Screenfunctions.h"
 #include "StateMachine.h"
