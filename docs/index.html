@@ -287,7 +287,7 @@
         <h1>🎲 QuantumDice Software Flasher</h1>
         <p class="subtitle">
             Flash firmware to your ESP32 directly from your browser 
-            <span class="badge" style="margin-left: 10px;">v1.6.2</span>
+            <span class="badge" style="margin-left: 10px;">v1.6.3</span>
             <a href="https://github.com/qlab-utwente/Quantum-Dice-by-UTwente/blob/main/Arduino/README.md" 
                target="_blank" 
                style="text-decoration: none;">
@@ -906,7 +906,7 @@
                 
                 // Write firmware
                 await esploader.writeFlash({
-                    fileArray: [{ data: binaryString, address: 0x0 }],
+                    fileArray: [{ data: binaryString, address: 0x10000 }],
                     flashSize: "keep",
                     eraseAll: false,
                     compress: true,
