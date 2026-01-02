@@ -1,29 +1,27 @@
-name: Clang-Tidy Lint
+name: ESP32 Clang-Tidy
 
 on:
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [ main, develop ]
 
 jobs:
-  clang-tidy:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # important for git ls-files
+          fetch-depth: 0
 
       - name: Install clang-tidy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-tidy
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy
 
-      - name: Make lint script executable
-        run: chmod +x Arduino/lint.sh
+      - name: Setup Arduino ESP32
+        run: |
+          chmod +x Arduino/setup_arduino_esp32.sh
+          Arduino/setup_arduino_esp32.sh
 
       - name: Run clang-tidy
         run: |
-          bash Arduino/lint.sh
+          chmod +x Arduino/lint.sh
+          Arduino/lint.sh
