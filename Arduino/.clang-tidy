@@ -1,4 +1,7 @@
-Checks: '-*,modernize-*,cppcoreguidelines-pro-type-member-init,bugprone-*'
-WarningsAsErrors: 'performance-*'
+---
+Checks:            'bugprone-*, cert-*, cppcoreguidelines-*, misc-*, modernize-*, performance-*, readability-*'
+WarningsAsErrors:  'bugprone-*, cert-*'
+HeaderFileExtensions:         ['h', 'hh', 'hpp', 'hxx']
+ImplementationFileExtensions: ['c', 'cc', 'cpp', 'cxx', 'ino']
 HeaderFilterRegex: '.*'
-FormatStyle: file # This tells clang-tidy to use the nearby .clang-format file for fixes
+FormatStyle:       file
