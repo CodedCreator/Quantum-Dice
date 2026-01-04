@@ -1,44 +1,43 @@
 #ifndef ARRAY_H_
 #define ARRAY_H_
 
-template <typename T>
-class Queue {
-   private:
-    T* data;
+template<typename T> class Queue {
+  private:
+    T     *data;
     size_t count;
     size_t capacity;
     size_t head;
     size_t tail;
 
-   private:
+  private:
     void resize(size_t newCapacity) {
-        T* newData = new T[newCapacity];
+        T *newData = new T[newCapacity];
         for (size_t i = 0; i <= count; i++) {
             newData[i] = data[(head + i) % capacity];
         }
 
         delete[] data;
-        data = newData;
+        data     = newData;
         capacity = newCapacity;
-        head = 0;
-        tail = count;
+        head     = 0;
+        tail     = count;
     }
 
-   public:
+  public:
     Queue(size_t initial_capacity) {
-        count = 0;
-        head = 0;
-        tail = 0;
+        count    = 0;
+        head     = 0;
+        tail     = 0;
         capacity = initial_capacity;
-        data = new T[capacity];
+        data     = new T[capacity];
     }
 
     Queue() {
-        count = 0;
-        head = 0;
-        tail = 0;
+        count    = 0;
+        head     = 0;
+        tail     = 0;
         capacity = 2;
-        data = new T[capacity];
+        data     = new T[capacity];
     }
 
     ~Queue() {
@@ -52,20 +51,25 @@ class Queue {
         }
 
         data[tail] = item;
-        tail = (tail + 1) % capacity;
+        tail       = (tail + 1) % capacity;
         count++;
     }
 
     T pop() {
         assert(count > 0);
         T item = data[head];
-        head = (head + 1) % capacity;
+        head   = (head + 1) % capacity;
         count--;
         return item;
     }
 
-    bool isEmpty() const { return count == 0; }
-    size_t size() const { return count; }
+    bool isEmpty() const {
+        return count == 0;
+    }
+
+    size_t size() const {
+        return count;
+    }
 };
 
 #endif

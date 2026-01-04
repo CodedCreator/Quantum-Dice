@@ -35,40 +35,39 @@ enum screenselections {
 };
 
 extern screenselections selectScreen;
-extern int dotDia;
+extern int              dotDia;
 
-void selectScreens(uint8_t i);
+void     selectScreens(uint8_t i);
 uint16_t blendColor(uint16_t foreground, uint16_t background, float alpha);
-void drawDot(int x, int y, float alpha = 1.0, uint16_t color = GC9A01A_WHITE,
-             uint16_t bgColor = GC9A01A_BLACK);
-void displayImageWithBackground(const unsigned short* image, uint8_t screens);
-void initDisplays();
-void blankScreen(uint8_t screens);
-void displayCircle(uint8_t screens);
-void displayCross(uint8_t screens);
-void displayCrossCircle(uint8_t screens);
-void displayEinstein(uint8_t screens);
-void displayEntangled(uint8_t screens);
-void displayLowBattery(uint8_t screens);
-void displayNewDie(uint8_t screens);
-void displayQLab(uint8_t screens);
-void displayUTlogo(uint8_t screens);
-void displayQRcode(uint8_t screens);
-void display1to6(uint8_t screens);
-void display1to6_ent(uint8_t screens);
-void displayN1(uint8_t screens);
-void displayN2(uint8_t screens);
-void displayN3(uint8_t screens);
-void displayN4(uint8_t screens);
-void displayN5(uint8_t screens);
-void displayN6(uint8_t screens);
-void displayMix1to6(uint8_t screens);
-void displayMix1to6_entAB1(uint8_t screens);
-void displayMix1to6_entAB2(uint8_t screens);
-void printChar(uint8_t screens, char* letters, uint16_t fontcolor,
-               uint16_t bckcolor, int x, int y);
+void     drawDot(int x, int y, float alpha = 1.0, uint16_t color = GC9A01A_WHITE,
+                 uint16_t bgColor = GC9A01A_BLACK);
+void     displayImageWithBackground(const unsigned short *image, uint8_t screens);
+void     initDisplays();
+void     blankScreen(uint8_t screens);
+void     displayCircle(uint8_t screens);
+void     displayCross(uint8_t screens);
+void     displayCrossCircle(uint8_t screens);
+void     displayEinstein(uint8_t screens);
+void     displayEntangled(uint8_t screens);
+void     displayLowBattery(uint8_t screens);
+void     displayNewDie(uint8_t screens);
+void     displayQLab(uint8_t screens);
+void     displayUTlogo(uint8_t screens);
+void     displayQRcode(uint8_t screens);
+void     display1to6(uint8_t screens);
+void     display1to6_ent(uint8_t screens);
+void     displayN1(uint8_t screens);
+void     displayN2(uint8_t screens);
+void     displayN3(uint8_t screens);
+void     displayN4(uint8_t screens);
+void     displayN5(uint8_t screens);
+void     displayN6(uint8_t screens);
+void     displayMix1to6(uint8_t screens);
+void     displayMix1to6_entAB1(uint8_t screens);
+void     displayMix1to6_entAB2(uint8_t screens);
+void printChar(uint8_t screens, char *letters, uint16_t fontcolor, uint16_t bckcolor, int x, int y);
 void voltageIndicator(uint8_t screens);
 void welcomeInfo(uint8_t screens);
-void drawStringCentered(Adafruit_GFX& gfx, const String& text, int16_t y);
+void drawStringCentered(Adafruit_GFX &gfx, const String &text, int16_t y);
 
 #endif /* SCREENFUNCTIONS_H_ */

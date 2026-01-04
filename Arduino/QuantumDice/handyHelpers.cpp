@@ -1,18 +1,18 @@
 #include "handyHelpers.h"
 
 #include "Arduino.h"
-#include "IMUhelpers.h"
 #include "defines.h"
+#include "IMUhelpers.h"
 
 // Define global configuration object
-DiceConfig currentConfig;
+DiceConfig   currentConfig;
 HardwarePins hwPins;
 
 // Existing global variables
 RTC_DATA_ATTR int bootCount = 0;
-Button2 button;
-bool clicked = false;
-bool longclicked = false;
+Button2           button;
+bool              clicked     = false;
+bool              longclicked = false;
 
 /**
  * Initialize hardware pins based on configuration
@@ -23,9 +23,9 @@ void initHardwarePins() {
 
     // Set TFT pins based on NANO vs DEVKIT
     if (currentConfig.isNano) {
-        hwPins.tft_cs = 21;
+        hwPins.tft_cs  = 21;
         hwPins.tft_rst = 4;
-        hwPins.tft_dc = 2;
+        hwPins.tft_dc  = 2;
         hwPins.adc_pin = 1;
 
         // Screen CS pins for NANO
@@ -37,9 +37,9 @@ void initHardwarePins() {
         hwPins.screen_cs[5] = 10;
     } else {
         // DEVKIT
-        hwPins.tft_cs = 10;
+        hwPins.tft_cs  = 10;
         hwPins.tft_rst = 48;
-        hwPins.tft_dc = 47;
+        hwPins.tft_dc  = 47;
         hwPins.adc_pin = 2;
 
         // Screen CS pins for DEVKIT
@@ -54,44 +54,44 @@ void initHardwarePins() {
     // Set screen address mapping based on SMD vs HDR
     if (currentConfig.isSMD) {
         // SMD screen addresses
-        uint8_t smdAddresses[16] = {             // singles
-                                    0b00000100,  // x0
-                                    0b00010000,  // x1
-                                    0b00001000,  // y0
-                                    0b00000010,  // y1
-                                    0b00100000,  // z0
-                                    0b00000001,  // z1
-                                                 // doubles
-                                    0b00010100,  // xx
-                                    0b00001010,  // yy
-                                    0b00100001,  // zz
-                                                 // quarters
+        uint8_t smdAddresses[16] = {            // singles
+                                    0b00000100, // x0
+                                    0b00010000, // x1
+                                    0b00001000, // y0
+                                    0b00000010, // y1
+                                    0b00100000, // z0
+                                    0b00000001, // z1
+                                                // doubles
+                                    0b00010100, // xx
+                                    0b00001010, // yy
+                                    0b00100001, // zz
+                                                // quarters
                                     0b00011110, 0b00101011, 0b00110101,
                                     // triples + / -
-                                    0b00101100,  // x0y0z0
-                                    0b00010011,  // x1y1z1
-                                                 // others
+                                    0b00101100, // x0y0z0
+                                    0b00010011, // x1y1z1
+                                                // others
                                     0b00111111, 0b00000000};
         memcpy(hwPins.screenAddress, smdAddresses, 16);
     } else {
         // HDR screen addresses
-        uint8_t hdrAddresses[16] = {             // singles
-                                    0b00001000,  // x0
-                                    0b00000010,  // x1
-                                    0b00000100,  // y0
-                                    0b00010000,  // y1
-                                    0b00100000,  // z0
-                                    0b00000001,  // z1
-                                                 // doubles
-                                    0b00001010,  // xx
-                                    0b00010100,  // yy
-                                    0b00100001,  // zz
-                                                 // quarters
+        uint8_t hdrAddresses[16] = {            // singles
+                                    0b00001000, // x0
+                                    0b00000010, // x1
+                                    0b00000100, // y0
+                                    0b00010000, // y1
+                                    0b00100000, // z0
+                                    0b00000001, // z1
+                                                // doubles
+                                    0b00001010, // xx
+                                    0b00010100, // yy
+                                    0b00100001, // zz
+                                                // quarters
                                     0b00011110, 0b00101011, 0b00110101,
                                     // triples + / -
-                                    0b00101100,  // x0y0z0
-                                    0b00010011,  // x1y1z1
-                                                 // others
+                                    0b00101100, // x0y0z0
+                                    0b00010011, // x1y1z1
+                                                // others
                                     0b00111111, 0b00000000};
         memcpy(hwPins.screenAddress, hdrAddresses, 16);
     }
@@ -139,20 +139,14 @@ void initEEPROM() {
  */
 void printEEPROMMemoryMap() {
     Serial.println("\n=== EEPROM Memory Map ===");
-    Serial.printf("BNO055 Sensor ID:    0x%04X - 0x%04X (%d bytes)\n",
-                  EEPROM_BNO_SENSOR_ID_ADDR,
+    Serial.printf("BNO055 Sensor ID:    0x%04X - 0x%04X (%d bytes)\n", EEPROM_BNO_SENSOR_ID_ADDR,
                   EEPROM_BNO_SENSOR_ID_ADDR + sizeof(long) - 1, sizeof(long));
-    Serial.printf(
-        "BNO055 Calibration:  0x%04X - 0x%04X (%d bytes)\n",
-        EEPROM_BNO_CALIBRATION_ADDR,
-        EEPROM_BNO_CALIBRATION_ADDR + sizeof(adafruit_bno055_offsets_t) - 1,
-        sizeof(adafruit_bno055_offsets_t));
-    Serial.printf("Dice Configuration:  0x%04X - 0x%04X (%d bytes)\n",
-                  EEPROM_CONFIG_ADDRESS,
-                  EEPROM_CONFIG_ADDRESS + sizeof(DiceConfig) - 1,
-                  sizeof(DiceConfig));
-    Serial.printf("Total used:          %d bytes\n",
-                  EEPROM_CONFIG_ADDRESS + sizeof(DiceConfig));
+    Serial.printf("BNO055 Calibration:  0x%04X - 0x%04X (%d bytes)\n", EEPROM_BNO_CALIBRATION_ADDR,
+                  EEPROM_BNO_CALIBRATION_ADDR + sizeof(adafruit_bno055_offsets_t) - 1,
+                  sizeof(adafruit_bno055_offsets_t));
+    Serial.printf("Dice Configuration:  0x%04X - 0x%04X (%d bytes)\n", EEPROM_CONFIG_ADDRESS,
+                  EEPROM_CONFIG_ADDRESS + sizeof(DiceConfig) - 1, sizeof(DiceConfig));
+    Serial.printf("Total used:          %d bytes\n", EEPROM_CONFIG_ADDRESS + sizeof(DiceConfig));
     Serial.printf("Free space:          %d bytes\n",
                   EEPROM_SIZE - (EEPROM_CONFIG_ADDRESS + sizeof(DiceConfig)));
     Serial.println("========================\n");
@@ -177,12 +171,12 @@ void printEEPROMMemoryMap() {
 /**
  * Validate configuration data
  */
-bool validateConfig(const DiceConfig& config) {
+bool validateConfig(const DiceConfig &config) {
     // Check if diceId is null-terminated and contains printable characters
     bool validId = false;
     for (int i = 0; i < 16; i++) {
         if (config.diceId[i] == '\0') {
-            validId = (i > 0);  // At least one character before null
+            validId = (i > 0); // At least one character before null
             break;
         }
         if (!isprint(config.diceId[i])) {
@@ -213,22 +207,19 @@ bool validateConfig(const DiceConfig& config) {
 
     // Validate randomSwitchPoint (should be 0-100)
     if (config.randomSwitchPoint > 100) {
-        Serial.printf("ERROR: Invalid randomSwitchPoint: %d\n",
-                      config.randomSwitchPoint);
+        Serial.printf("ERROR: Invalid randomSwitchPoint: %d\n", config.randomSwitchPoint);
         return false;
     }
 
     // Validate tumbleConstant (should be positive and reasonable)
     if (config.tumbleConstant <= 0 || config.tumbleConstant > 10.0) {
-        Serial.printf("ERROR: Invalid tumbleConstant: %.2f\n",
-                      config.tumbleConstant);
+        Serial.printf("ERROR: Invalid tumbleConstant: %.2f\n", config.tumbleConstant);
         return false;
     }
 
     // Validate deepSleepTimeout (should be reasonable, e.g., 10 sec to 1 hour)
-    if (config.deepSleepTimeout < 10000 || config.deepSleepTimeout > 3600000) {
-        Serial.printf("ERROR: Invalid deepSleepTimeout: %lu ms\n",
-                      config.deepSleepTimeout);
+    if (config.deepSleepTimeout < 10'000 || config.deepSleepTimeout > 3'600'000) {
+        Serial.printf("ERROR: Invalid deepSleepTimeout: %lu ms\n", config.deepSleepTimeout);
         return false;
     }
 
@@ -263,7 +254,7 @@ bool loadConfigFromEEPROM() {
 /**
  * Print configuration for debugging
  */
-void printConfig(const DiceConfig& config) {
+void printConfig(const DiceConfig &config) {
     Serial.println("\n=== Dice Configuration ===");
     Serial.print("Dice ID: ");
     Serial.println(config.diceId);
@@ -271,21 +262,27 @@ void printConfig(const DiceConfig& config) {
     Serial.print("Device A MAC: ");
     for (int i = 0; i < 6; i++) {
         Serial.printf("%02X", config.deviceA_mac[i]);
-        if (i < 5) Serial.print(":");
+        if (i < 5) {
+            Serial.print(":");
+        }
     }
     Serial.println();
 
     Serial.print("Device B1 MAC: ");
     for (int i = 0; i < 6; i++) {
         Serial.printf("%02X", config.deviceB1_mac[i]);
-        if (i < 5) Serial.print(":");
+        if (i < 5) {
+            Serial.print(":");
+        }
     }
     Serial.println();
 
     Serial.print("Device B2 MAC: ");
     for (int i = 0; i < 6; i++) {
         Serial.printf("%02X", config.deviceB2_mac[i]);
-        if (i < 5) Serial.print(":");
+        if (i < 5) {
+            Serial.print(":");
+        }
     }
     Serial.println();
 
@@ -305,8 +302,8 @@ void printConfig(const DiceConfig& config) {
     Serial.printf("\nTiming Constants:\n");
     Serial.printf("  Random Switch Point: %d\n", config.randomSwitchPoint);
     Serial.printf("  Tumble Constant: %.2f\n", config.tumbleConstant);
-    Serial.printf("  Deep Sleep Timeout: %lu ms (%.1f minutes)\n",
-                  config.deepSleepTimeout, config.deepSleepTimeout / 60000.0);
+    Serial.printf("  Deep Sleep Timeout: %lu ms (%.1f minutes)\n", config.deepSleepTimeout,
+                  config.deepSleepTimeout / 60000.0);
 
     Serial.printf("Checksum: 0x%02X\n", config.checksum);
     Serial.println("==========================\n");
@@ -314,23 +311,22 @@ void printConfig(const DiceConfig& config) {
 
 // ... (rest of existing functions remain the same)
 
-void checkTimeForDeepSleep(IMUSensor* imuSensor) {
-    static bool isMoving = false;
+void checkTimeForDeepSleep(IMUSensor *imuSensor) {
+    static bool          isMoving         = false;
     static unsigned long lastMovementTime = 0;
 
     if (imuSensor->isNotMoving()) {
         if (isMoving) {
             lastMovementTime = millis();
-            isMoving = false;
+            isMoving         = false;
         }
     } else {
         isMoving = true;
     }
 
     // Use the timeout from configuration
-    if (!isMoving &&
-        (millis() - lastMovementTime > currentConfig.deepSleepTimeout)) {
-        lastMovementTime = millis();  // Reset the timer
+    if (!isMoving && (millis() - lastMovementTime > currentConfig.deepSleepTimeout)) {
+        lastMovementTime = millis(); // Reset the timer
         debugln("Time to sleep");
         digitalWrite(REGULATOR_PIN, HIGH);
     }
@@ -343,12 +339,12 @@ void initButton() {
     button.setClickHandler(click);
 }
 
-void longClickDetected(Button2& btn) {
+void longClickDetected(Button2 &btn) {
     debugln("long pressed");
     longclicked = true;
 }
 
-void click(Button2& btn) {
+void click(Button2 &btn) {
     debugln("short pressed");
     clicked = true;
 }
@@ -360,7 +356,7 @@ uint8_t generateDiceRoll() {
     // Check if we got a valid random number (0 indicates error)
     if (randomNumber == 0) {
         Serial.println("ERROR: Failed to get random number");
-        return 1;  // Default value in case of error
+        return 1; // Default value in case of error
     }
 
     // Map to 1-6 range using modulo
@@ -379,27 +375,24 @@ uint8_t generateDiceRollRejection() {
             Serial.println("ERROR: Failed to get random byte");
             return 1;
         }
-    } while (randomByte >= 252);  // 252 = 6 * 42, ensures uniform distribution
+    } while (randomByte >= 252); // 252 = 6 * 42, ensures uniform distribution
 
     return (randomByte % 6) + 1;
 }
 
 bool checkMinimumVoltage() {
-    float voltage =
-        analogReadMilliVolts(hwPins.adc_pin) / 1000.0 *
-        2.0;  // ADC measures 50% of battery voltage by 50/50 voltage divider
+    float voltage = analogReadMilliVolts(hwPins.adc_pin) / 1000.0
+                    * 2.0; // ADC measures 50% of battery voltage by 50/50 voltage divider
     // debugln(voltage);
-    if (voltage < MINBATERYVOLTAGE &&
-        voltage > 0.5)  // while on USB the voltage is 0
+    if (voltage < MINBATERYVOLTAGE && voltage > 0.5) { // while on USB the voltage is 0
         return true;
-    else
+    } else {
         return false;
+    }
 }
 
-float mapFloat(float x, float in_min, float in_max, float out_min,
-               float out_max, bool clipOutput) {
-    float mappedValue =
-        (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+float mapFloat(float x, float in_min, float in_max, float out_min, float out_max, bool clipOutput) {
+    float mappedValue = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 
     // Apply clipping if clipOutput is true
     if (clipOutput) {
@@ -410,10 +403,10 @@ float mapFloat(float x, float in_min, float in_max, float out_min,
 }
 
 bool withinBounds(float val, float minimum, float maximum) {
-    return ((minimum <= val) && (val <= maximum));
+    return (minimum <= val) && (val <= maximum);
 }
 
 void initSerial() {
-    Serial.begin(115200);
+    Serial.begin(115'200);
     delay(1000);
 }
