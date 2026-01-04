@@ -5,9 +5,9 @@
 echo "--- Running Clang-Tidy linter ---"
 
 # --- Configuration (Adjust as needed) ---
-FILE_EXTENSIONS='\.cpp|\.hpp|\.cxx|\.cc|\.h|\.hxx'
+FILE_EXTENSIONS='\.cc|\.cpp|\.cxx|\.ino|\.h|\.hh|\.hpp|\.hxx'
 EXCLUDE_DIRS="build/|ImageLibrary/"
-COMPILER_ARGS="-std=c++17 -Iinclude" 
+COMPILER_ARGS="-std=c++17 -Iinclude"
 
 # --- Execution ---
 

@@ -5,7 +5,7 @@
 echo "--- Running Clang-Tidy & Clang-Format for Fixing ---"
 
 # --- Configuration (Adjust as needed) ---
-FILE_EXTENSIONS='\.cpp|\.hpp|\.cxx|\.cc|\.h|\.hxx'
+FILE_EXTENSIONS='\.cc|\.cpp|\.cxx|\.ino|\.h|\.hh|\.hpp|\.hxx'
 EXCLUDE_DIRS="build/|ImageLibrary/"
 COMPILER_ARGS="-std=c++17 -Iinclude" # IMPORTANT: Must match the report script's args!
 
@@ -43,7 +43,7 @@ if [ -n "$UNFIXABLE_OUTPUT" ]; then
     echo "** The following errors/warnings could NOT be automatically fixed and require manual intervention: **"
     echo "$UNFIXABLE_OUTPUT"
     # Exit with an error code to signal unfixable issues in CI
-    exit 1 
+    exit 1
 else
     echo "All auto-fixable issues were resolved and no further unfixable issues were found."
     exit 0
