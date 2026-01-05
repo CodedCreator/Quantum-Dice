@@ -6,7 +6,7 @@ echo "--- Running Clang-Tidy linter ---"
 
 # --- Configuration (Adjust as needed) ---
 FILE_EXTENSIONS='\.cc|\.cpp|\.cxx|\.ino|\.h|\.hh|\.hpp|\.hxx'
-EXCLUDE_DIRS="build/|ImageLibrary/"
+EXCLUDE_DIRS="3D print files/|docs/|images/|PCB files/|scripts/|ImageLibrary/"
 COMPILER_ARGS="-std=c++17 -Iinclude"
 
 # --- Execution ---
