@@ -263,6 +263,7 @@ DiceNumbers selectOneToSix() {
         case 5: return DiceNumbers::FIVE; break;
         case 6: return DiceNumbers::SIX; break;
     }
+    return DiceNumbers::ONE;
 }
 
 DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop) {
@@ -275,6 +276,7 @@ DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop) {
         case DiceNumbers::FIVE:  return DiceNumbers::TWO; break;
         case DiceNumbers::SIX:   return DiceNumbers::ONE; break;
     }
+    return DiceNumbers::ONE;
 }
 
 MeasuredAxises getAxis(IMUSensor *imuSensor) {
