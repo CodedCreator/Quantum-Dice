@@ -1,14 +1,14 @@
 # Dice Configuration File
 # Lines starting with # are comments
 # Edit values after the = sign
-# Save this file as XXXX_config.txt (XXX is diceID)
+# Save this file as XXXXX_config.txt (XXXXX is diceID) maximum of 5 characters
 # upload to your Quantum Dice (See instructions)
 # https://thelastoutpostworkshop.github.io/ESPConnect/
 
 # ==========================================
 # DEVICE IDENTIFICATION (UNIQUE)
 # ==========================================
-# Unique identifier for this dice (max 15 characters)
+# Unique identifier for this dice (max 5 characters)
 diceId=TEST1
 
 # ==========================================

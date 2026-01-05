@@ -29,7 +29,7 @@ void setup() {
   // Print version and configuration info
   Serial.println("\n" __FILE__ " " __DATE__ " " __TIME__);
   Serial.print("FW: ");
-  Serial.print(VERSION);
+  Serial.println(VERSION);
 
   // Load config
   if (!loadGlobalConfig(true)) {
