@@ -18,8 +18,8 @@ jobs:
 
       - name: Setup Arduino ESP32
         run: |
-          chmod +x Arduino/setup_arduino_esp32.sh
-          Arduino/setup_arduino_esp32.sh
+          chmod +x scripts/setup_arduino_esp32.sh
+          scripts/setup_arduino_esp32.sh
 
       - name: Run clang-tidy
         run: |
