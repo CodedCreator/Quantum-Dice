@@ -36,6 +36,7 @@ CLANG_TIDY_CMD=(
     clang-tidy
     -p "$BUILD_DIR"
     "-header-filter=^Arduino/"
+	-system-headers=false
 )
 
 if [ "$SUPPRESS_WARNINGS" = true ]; then

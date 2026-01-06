@@ -36,7 +36,7 @@ echo "$FILES" | xargs -r \
 # -------- Report remaining issues --------
 echo "--- Reporting remaining issues ---"
 UNFIXABLE=$(echo "$FILES" | xargs -r -P 4 \
-  clang-tidy -p "$BUILD_DIR")
+  clang-tidy -p "$BUILD_DIR" --system-headers=false)
 
 if [ -n "$UNFIXABLE" ]; then
     echo "❌ Unfixable issues remain:"
