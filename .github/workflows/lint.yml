@@ -23,5 +23,5 @@ jobs:
 
       - name: Run clang-tidy
         run: |
-          chmod +x Arduino/lint.sh
-          Arduino/lint.sh
+          chmod +x scripts/lint.sh
+          scripts/lint.sh
