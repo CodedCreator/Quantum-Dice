@@ -4,16 +4,17 @@
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
 
-#define LOWERBOUND 9.0  // g-values boundaries for axis detection
+#define LOWERBOUND 9.0 // g-values boundaries for axis detection
 #define UPPERBOUND 10.50
 #define TWOPI 6.2831853072
 
 class IMUSensor {
-   public:
+  public:
     virtual ~IMUSensor() {}
 
     // Sensor specific functions
     virtual void init() {}
+
     virtual void update() {}
 
     // Independent functions
@@ -21,19 +22,31 @@ class IMUSensor {
     // void measureBias();
     bool tumbled(float minRotation);
     bool isMoving();
-    bool isNotMoving() { return !isMoving(); }
 
-    float getXGravity() const { return _xGravity; }
-    float getYGravity() const { return _yGravity; }
-    float getZGravity() const { return _zGravity; }
+    bool isNotMoving() {
+        return !isMoving();
+    }
 
-   protected:
-    virtual void processData(sensors_event_t* event) {}
+    float getXGravity() const {
+        return _xGravity;
+    }
+
+    float getYGravity() const {
+        return _yGravity;
+    }
+
+    float getZGravity() const {
+        return _zGravity;
+    }
+
+  protected:
+    virtual void processData(sensors_event_t *event) {}
+
     void updateUpVector(double deltaTime);
 
-   protected:
-    const float threshold = 1.6;  // maximum acceleration to indicate stable
-    const unsigned long stableTime = 200;  // ms)
+  protected:
+    const float         threshold  = 1.6; // maximum acceleration to indicate stable
+    const unsigned long stableTime = 200; // ms)
 
     unsigned long _prevMicros;
     unsigned long _lastMovementTime;
@@ -54,16 +67,16 @@ class IMUSensor {
 #include <utility/imumaths.h>
 
 class BNO055IMUSensor : public IMUSensor {
-   public:
+  public:
     void init() override;
     void update() override;
-    void processData(sensors_event_t* event) override;
+    void processData(sensors_event_t *event) override;
 
-   private:
+  private:
     Adafruit_BNO055 _accGyro;
-    void restoreCalibrationData();
-    void displaySensorOffsets(const adafruit_bno055_offsets_t& calibData);
-    void displayCalStatus(void);
+    void            restoreCalibrationData();
+    void            displaySensorOffsets(const adafruit_bno055_offsets_t &calibData);
+    void            displayCalStatus(void);
 };
 
 #endif /* IMUHELPERS_H_ */

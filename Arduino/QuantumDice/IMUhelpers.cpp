@@ -3,12 +3,12 @@
 #include "Adafruit_Sensor.h"
 #include "Arduino.h"
 #include "defines.h"
-#include "handyHelpers.h"  // Include for EEPROM address definitions
+#include "handyHelpers.h" // Include for EEPROM address definitions
 
 //***************************** IMU independant functions
 void IMUSensor::updateUpVector(double deltaTime) {
     // Calculate the new Up
-    double xRot = _xGyro * deltaTime;  // rotation angle over the last deltaTime
+    double xRot = _xGyro * deltaTime; // rotation angle over the last deltaTime
     double yRot = _yGyro * deltaTime;
     double zRot = _zGyro * deltaTime;
 
@@ -70,11 +70,10 @@ void IMUSensor::updateUpVector(double deltaTime) {
 void IMUSensor::reset() {
     _prevMicros = micros();
 
-    float inverseMagnitude =
-        1.0 / sqrt((_xGravity * _xGravity + _yGravity * _yGravity +
-                    _zGravity * _zGravity));
+    float inverseMagnitude
+      = 1.0 / sqrt(_xGravity * _xGravity + _yGravity * _yGravity + _zGravity * _zGravity);
 
-    _xUpStart = -_xGravity * inverseMagnitude;  // unit vector
+    _xUpStart = -_xGravity * inverseMagnitude; // unit vector
     _yUpStart = -_yGravity * inverseMagnitude;
     _zUpStart = -_zGravity * inverseMagnitude;
 
@@ -113,10 +112,9 @@ bool IMUSensor::tumbled(float minRotation) {
     double dotProduct = _xUp * _xUpStart + _yUp * _yUpStart + _zUp * _zUpStart;
 
     // Clamp dot product to valid range for acos [-1, 1]
-    dotProduct = constrain(dotProduct, -1.0, 1.0);
-    double rotation = acos(dotProduct) /
-                      TWOPI;  // inverse cos of dot product between vectors,
-                              // normalised (2PI=1.0). Max rotation: 0.5
+    dotProduct      = constrain(dotProduct, -1.0, 1.0);
+    double rotation = acos(dotProduct) / TWOPI; // inverse cos of dot product between vectors,
+                                                // normalised (2PI=1.0). Max rotation: 0.5
 
     if (abs(rotation) > (double)minRotation) {
         debug("Start Up (");
@@ -151,7 +149,7 @@ bool IMUSensor::isMoving() {
     if (_magnitude < threshold) {
         if (_isMoving) {
             _lastMovementTime = millis();
-            _isMoving = false;
+            _isMoving         = false;
         }
     } else {
         _isMoving = true;
@@ -185,16 +183,16 @@ void BNO055IMUSensor::init() {
 
     // Wait for valid gravity data before calling reset
     debugln("Waiting for valid gravity data...");
-    int attempts = 0;
+    int   attempts         = 0;
     float gravityMagnitude = 0.0;
 
     do {
         delay(100);
-        update();  // Get sensor reading
+        update(); // Get sensor reading
         attempts++;
 
-        gravityMagnitude = sqrt(_xGravity * _xGravity + _yGravity * _yGravity +
-                                _zGravity * _zGravity);
+        gravityMagnitude
+          = sqrt(_xGravity * _xGravity + _yGravity * _yGravity + _zGravity * _zGravity);
 
         debug("Attempt ");
         debug(attempts);
@@ -213,12 +211,11 @@ void BNO055IMUSensor::init() {
         reset();
         debugln("Up vector initialized successfully");
     } else {
-        debugln(
-            "Warning: Failed to get valid gravity data after 100 attempts!");
+        debugln("Warning: Failed to get valid gravity data after 100 attempts!");
         // Set a default up vector as fallback
-        _xUp = 0.0;
-        _yUp = 0.0;
-        _zUp = 1.0;
+        _xUp      = 0.0;
+        _yUp      = 0.0;
+        _zUp      = 1.0;
         _xUpStart = 0.0;
         _yUpStart = 0.0;
         _zUpStart = 1.0;
@@ -284,12 +281,11 @@ void BNO055IMUSensor::restoreCalibrationData() {
     }
 
     // Optional: Display current calibration status
-    delay(100);  // Give sensor time to settle
+    delay(100); // Give sensor time to settle
     displayCalStatus();
 }
 
-void BNO055IMUSensor::displaySensorOffsets(
-    const adafruit_bno055_offsets_t& calibData) {
+void BNO055IMUSensor::displaySensorOffsets(const adafruit_bno055_offsets_t &calibData) {
     debug("Accel: ");
     debug(calibData.accel_offset_x);
     debug(" ");
@@ -345,8 +341,8 @@ void BNO055IMUSensor::displayCalStatus(void) {
 }
 
 void BNO055IMUSensor::update() {
-    unsigned long currentMicros = micros();
-    double deltaTime = (currentMicros - _prevMicros) * 1e-6;
+    unsigned long   currentMicros = micros();
+    double          deltaTime     = (currentMicros - _prevMicros) * 1e-6;
     sensors_event_t angVelocityData, linearAccelData, gravityData;
     _accGyro.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
     _accGyro.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
@@ -358,7 +354,7 @@ void BNO055IMUSensor::update() {
     _prevMicros = currentMicros;
 }
 
-void BNO055IMUSensor::processData(sensors_event_t* event) {
+void BNO055IMUSensor::processData(sensors_event_t *event) {
     switch (event->type) {
         case SENSOR_TYPE_LINEAR_ACCELERATION:
             _ax = event->acceleration.x;

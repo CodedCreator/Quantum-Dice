@@ -1,5 +1,5 @@
-3D print files/~$Bill of Material quantum dice.xlsx
-Arduino/QuantumDiceInitTool/build/*
-Arduino/QuantumDice/build/*
-Arduino/~$DiceStateGenerators v2.xlsx
+Arduino/**/build/
+
 *.bin
+*.elf
+*.map

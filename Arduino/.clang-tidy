@@ -1,4 +1,0 @@
-Checks: '-*,modernize-*,cppcoreguidelines-pro-type-member-init,bugprone-*'
-WarningsAsErrors: 'performance-*'
-HeaderFilterRegex: '.*'
-FormatStyle: file # This tells clang-tidy to use the nearby .clang-format file for fixes

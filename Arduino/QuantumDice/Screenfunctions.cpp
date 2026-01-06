@@ -2,16 +2,16 @@
 
 #include "Adafruit_GC9A01A.h"
 #include "Arduino.h"
+#include "defines.h"
 #include "Globals.h"
-#include "IMUhelpers.h"
+#include "handyHelpers.h"
 #include "ImageLibrary/ImageLibrary.h"
+#include "IMUhelpers.h"
 #include "ScreenStateDefs.h"
 #include "Version.h"
-#include "defines.h"
-#include "handyHelpers.h"
 
 // Global TFT object - will be initialized dynamically
-Adafruit_GC9A01A tft(-1, -1, -1);  // Temporary pins, will be reinitialized
+Adafruit_GC9A01A tft(-1, -1, -1); // Temporary pins, will be reinitialized
 
 // Global canvas declarations
 static GFXcanvas16 backgroundCanvas(240, 240);
@@ -24,9 +24,9 @@ void selectScreens(uint8_t binaryCode) {
     // Use hwPins from handyHelpers
     for (int i = 0; i < 6; i++) {
         if (hwPins.screenAddress[binaryCode] & (1 << i)) {
-            digitalWrite(hwPins.screen_cs[i], LOW);  // Activate device
+            digitalWrite(hwPins.screen_cs[i], LOW); // Activate device
         } else {
-            digitalWrite(hwPins.screen_cs[i], HIGH);  // Deactivate device
+            digitalWrite(hwPins.screen_cs[i], HIGH); // Deactivate device
         }
     }
 }
@@ -37,15 +37,15 @@ void initDisplays() {
     // Initialize CS pins for all screens
     for (int i = 0; i < 6; i++) {
         pinMode(hwPins.screen_cs[i], OUTPUT);
-        digitalWrite(hwPins.screen_cs[i], HIGH);  // Start with all deactivated
+        digitalWrite(hwPins.screen_cs[i], HIGH); // Start with all deactivated
     }
 
     // Reinitialize TFT with correct pins from configuration
     tft = Adafruit_GC9A01A(hwPins.tft_cs, hwPins.tft_dc, hwPins.tft_rst);
 
-    selectScreens(ALL);  // Select all screens
+    selectScreens(ALL); // Select all screens
     delay(500);
-    tft.begin();  // Initialize the display
+    tft.begin(); // Initialize the display
     delay(1000);
     tft.fillScreen(GC9A01A_BLACK);
 
@@ -55,7 +55,7 @@ void initDisplays() {
     selectScreens(ZZ);
     tft.setRotation(2);
 
-    selectScreens(NO_ONE);  // Deactivate all screens
+    selectScreens(NO_ONE); // Deactivate all screens
     delay(100);
 
     Serial.println("Displays initialized successfully!");
@@ -95,31 +95,24 @@ void drawDot(int x, int y, float alpha, uint16_t color, uint16_t bgColor) {
     tft.fillCircle(x, y, DOT_RADIUS, blendedColor);
 }
 
-void displayImageWithBackground(const unsigned short* image, uint8_t screens) {
+void displayImageWithBackground(const unsigned short *image, uint8_t screens) {
     // Select the appropriate screens
     selectScreens(screens);
 
     // Choose background color based on screen - use config values
     uint16_t backgroundColor;
     switch (screens) {
-        case XX:
-            backgroundColor = currentConfig.x_background;
-            break;
-        case YY:
-            backgroundColor = currentConfig.y_background;
-            break;
-        case ZZ:
-            backgroundColor = currentConfig.z_background;
-            break;
-        default:
-            backgroundColor = 0x0000;  // Black
+        case XX: backgroundColor = currentConfig.x_background; break;
+        case YY: backgroundColor = currentConfig.y_background; break;
+        case ZZ: backgroundColor = currentConfig.z_background; break;
+        default: backgroundColor = 0x0000; // Black
     }
 
     // Fill background canvas with selected color
     backgroundCanvas.fillScreen(backgroundColor);
 
     // Clear image canvas
-    imageCanvas.fillScreen(0x0000);  // Transparent black
+    imageCanvas.fillScreen(0x0000); // Transparent black
 
     // Draw image on image canvas
     for (int y = 0; y < HEIGHT; y++) {
@@ -237,7 +230,7 @@ void displayN2(uint8_t screens) {
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
-    int offset = DOT_OFFSET;
+    int offset  = DOT_OFFSET;
 
     drawDot(centerX - offset, centerY + offset);
     drawDot(centerX + offset, centerY - offset);
@@ -248,7 +241,7 @@ void displayN3(uint8_t screens) {
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
-    int offset = DOT_OFFSET;
+    int offset  = DOT_OFFSET;
 
     drawDot(centerX - offset, centerY + offset);
     drawDot(centerX, centerY);
@@ -260,7 +253,7 @@ void displayN4(uint8_t screens) {
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
-    int offset = DOT_OFFSET;
+    int offset  = DOT_OFFSET;
 
     drawDot(centerX - offset, centerY - offset);
     drawDot(centerX + offset, centerY - offset);
@@ -273,7 +266,7 @@ void displayN5(uint8_t screens) {
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
-    int offset = DOT_OFFSET;
+    int offset  = DOT_OFFSET;
 
     drawDot(centerX - offset, centerY - offset);
     drawDot(centerX + offset, centerY - offset);
@@ -287,7 +280,7 @@ void displayN6(uint8_t screens) {
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
-    int offset = DOT_OFFSET;
+    int offset  = DOT_OFFSET;
 
     drawDot(centerX - offset, centerY - offset);
     drawDot(centerX + offset, centerY - offset);
@@ -302,7 +295,7 @@ void displayMix1to6(uint8_t screens) {
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
-    int offset = DOT_OFFSET;
+    int offset  = DOT_OFFSET;
 
     drawDot(centerX - offset, centerY - offset, 3 * 0.16 + 0.2);
     drawDot(centerX + offset, centerY - offset, 5 * 0.16 + 0.2);
@@ -318,21 +311,15 @@ void displayMix1to6_entAB1(uint8_t screens) {
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
-    int offset = DOT_OFFSET;
+    int offset  = DOT_OFFSET;
 
     // Use entanglement color from config
-    drawDot(centerX - offset, centerY - offset, 3 * 0.16 + 0.2,
-            currentConfig.entang_ab1_color);
-    drawDot(centerX + offset, centerY - offset, 5 * 0.16 + 0.2,
-            currentConfig.entang_ab1_color);
-    drawDot(centerX - offset, centerY, 1 * 0.16 + 0.2,
-            currentConfig.entang_ab1_color);
-    drawDot(centerX + offset, centerY, 1 * 0.16 + 0.2,
-            currentConfig.entang_ab1_color);
-    drawDot(centerX - offset, centerY + offset, 5 * 0.16 + 0.2,
-            currentConfig.entang_ab1_color);
-    drawDot(centerX + offset, centerY + offset, 3 * 0.16 + 0.2,
-            currentConfig.entang_ab1_color);
+    drawDot(centerX - offset, centerY - offset, 3 * 0.16 + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX + offset, centerY - offset, 5 * 0.16 + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX - offset, centerY, 1 * 0.16 + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX + offset, centerY, 1 * 0.16 + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX - offset, centerY + offset, 5 * 0.16 + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX + offset, centerY + offset, 3 * 0.16 + 0.2, currentConfig.entang_ab1_color);
     drawDot(centerX, centerY, 3 * 0.16 + 0.2, currentConfig.entang_ab1_color);
 }
 
@@ -341,26 +328,20 @@ void displayMix1to6_entAB2(uint8_t screens) {
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
-    int offset = DOT_OFFSET;
+    int offset  = DOT_OFFSET;
 
     // Use entanglement color from config
-    drawDot(centerX - offset, centerY - offset, 3 * 0.16 + 0.2,
-            currentConfig.entang_ab2_color);
-    drawDot(centerX + offset, centerY - offset, 5 * 0.16 + 0.2,
-            currentConfig.entang_ab2_color);
-    drawDot(centerX - offset, centerY, 1 * 0.16 + 0.2,
-            currentConfig.entang_ab2_color);
-    drawDot(centerX + offset, centerY, 1 * 0.16 + 0.2,
-            currentConfig.entang_ab2_color);
-    drawDot(centerX - offset, centerY + offset, 5 * 0.16 + 0.2,
-            currentConfig.entang_ab2_color);
-    drawDot(centerX + offset, centerY + offset, 3 * 0.16 + 0.2,
-            currentConfig.entang_ab2_color);
+    drawDot(centerX - offset, centerY - offset, 3 * 0.16 + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX + offset, centerY - offset, 5 * 0.16 + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX - offset, centerY, 1 * 0.16 + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX + offset, centerY, 1 * 0.16 + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX - offset, centerY + offset, 5 * 0.16 + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX + offset, centerY + offset, 3 * 0.16 + 0.2, currentConfig.entang_ab2_color);
     drawDot(centerX, centerY, 3 * 0.16 + 0.2, currentConfig.entang_ab2_color);
 }
 
-void printChar(uint8_t screens, char* letters, uint16_t fontcolor,
-               uint16_t bckcolor, int x, int y) {
+void printChar(uint8_t screens, char *letters, uint16_t fontcolor, uint16_t bckcolor, int x,
+               int y) {
     selectScreens(screens);
     tft.fillScreen(bckcolor);
     tft.setTextColor(fontcolor);
@@ -370,9 +351,9 @@ void printChar(uint8_t screens, char* letters, uint16_t fontcolor,
     tft.print(letters);
 }
 
-void drawStringCentered(Adafruit_GFX& gfx, const String& text, int16_t y) {
+void drawStringCentered(Adafruit_GFX &gfx, const String &text, int16_t y) {
     // Variables to store text bounds
-    int16_t x1, y1;
+    int16_t  x1, y1;
     uint16_t w, h;
 
     // Get the text bounds
@@ -394,10 +375,11 @@ void voltageIndicator(uint8_t screens) {
     selectScreens(screens);
 
     // Use hwPins.adc_pin from configuration
-    float voltage = analogReadMilliVolts(hwPins.adc_pin) / 1000.0 * 2.0;
-    float percentage =
-        mapFloat(voltage, MINBATERYVOLTAGE, MAXBATERYVOLTAGE, 0.0, 100.0, true);
-    if (percentage > 100.0) percentage = 100.0;
+    float voltage    = analogReadMilliVolts(hwPins.adc_pin) / 1000.0 * 2.0;
+    float percentage = mapFloat(voltage, MINBATERYVOLTAGE, MAXBATERYVOLTAGE, 0.0, 100.0, true);
+    if (percentage > 100.0) {
+        percentage = 100.0;
+    }
     dtostrf(voltage, 3, 2, bufferV);
     strcat(bufferV, "V");
     dtostrf(percentage, 3, 0, bufferPerc);
@@ -413,7 +395,7 @@ void voltageIndicator(uint8_t screens) {
     staticCanvas.setFont(&FreeSans18pt7b);
 
     // Draw centered text
-    int16_t x1, y1;
+    int16_t  x1, y1;
     uint16_t w, h;
 
     // Center voltage text
