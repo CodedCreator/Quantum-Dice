@@ -1,50 +1,38 @@
-#!/bin/bash
-# Script: format_fix.sh
-# Purpose: Applies auto-fixes and formatting, then reports remaining unfixable issues.
+#!/usr/bin/env bash
+set -e
 
-echo "--- Running Clang-Tidy & Clang-Format for Fixing ---"
+echo "--- Running Clang-Tidy & Clang-Format (ESP32) ---"
 
-# --- Configuration (Adjust as needed) ---
-FILE_EXTENSIONS='\.cc|\.cpp|\.cxx|\.ino|\.h|\.hh|\.hpp|\.hxx'
-EXCLUDE_DIRS="3D print files/|docs/|images/|PCB files/|scripts/|ImageLibrary/"
-COMPILER_ARGS="-std=c++17 -Iinclude" # IMPORTANT: Must match the report script's args!
+# -------- Sketch selection --------
+SKETCH_NAME="${1:-QuantumDice}"
+SKETCH_DIR="Arduino/$SKETCH_NAME"
+BUILD_DIR="$SKETCH_DIR/build"
 
-# --- Execution ---
-
-# 1. Find all relevant files
-echo "Finding C++ files..."
-# Regex of directories to exclude (separated by pipes |)
-# Tip: Include the trailing slash (e.g., 'lib/') to avoid accidental partial matches (like excluding 'library.cpp')
-FILES_TO_CHECK=$(git ls-files | grep -v -E "$EXCLUDE_DIRS" | grep -E "$FILE_EXTENSIONS")
-
-if [ -z "$FILES_TO_CHECK" ]; then
-    echo "No C++ files found. Exiting."
-    exit 0
-fi
-
-# 2. Run clang-tidy with --fix to apply auto-fixable errors/warnings.
-echo "Running clang-tidy --fix to apply auto-fixes..."
-# The --fix flag modifies the files in place.
-# We suppress the normal output to focus on unfixable errors later.
-echo "$FILES_TO_CHECK" | xargs -r -P 4 sh -c 'clang-tidy --quiet --fix "$@" -- '"$COMPILER_ARGS" _
-
-# 3. Run clang-format for pure style fixes (faster and more reliable for formatting)
-echo "Running clang-format -i for final formatting pass..."
-# The -i flag modifies the files in place.
-echo "$FILES_TO_CHECK" | xargs -r clang-format -i -style=file
-
-echo "--- Reporting Unfixable Errors/Warnings ---"
-# 4. Re-run clang-tidy *without* --fix to capture only the remaining, unfixable issues.
-# We use the -header-filter='.*' flag to ensure checks run on headers too.
-#
-UNFIXABLE_OUTPUT=$(echo "$FILES_TO_CHECK" | xargs -r -P 4 sh -c 'clang-tidy "$@" -- '"$COMPILER_ARGS" _)
-
-if [ -n "$UNFIXABLE_OUTPUT" ]; then
-    echo "** The following errors/warnings could NOT be automatically fixed and require manual intervention: **"
-    echo "$UNFIXABLE_OUTPUT"
-    # Exit with an error code to signal unfixable issues in CI
+if [ ! -f "$BUILD_DIR/compile_commands.json" ]; then
+    echo "ERROR: compile_commands.json not found for $SKETCH_NAME"
+    echo "Run Arduino/setup_arduino_esp32.sh [$SKETCH_NAME] first."
     exit 1
-else
-    echo "All auto-fixable issues were resolved and no further unfixable issues were found."
+fi
+
+# -------- Find files --------
+FILES=$(git ls-files \
+  | grep -E '\.(cpp|cxx|cc|hpp|h)$' \
+  | grep -v -E 'build/|ImageLibrary/')
+
+if [ -z "$FILES" ]; then
+    echo "No C++ files found."
     exit 0
 fi
+
+# -------- Auto-fix --------
+echo "Applying clang-tidy auto-fixes..."
+echo "$FILES" | xargs -r -P 4 \
+  clang-tidy -p "$BUILD_DIR" --quiet --fix
+
+echo "Running clang-format..."
+echo "$FILES" | xargs -r \
+  clang-format -i -style=file
+
+# -------- Report remaining issues --------
+echo "--- Reporting remaining issues ---"
+sh scripts/lint.sh "$SKETCH_NAME"
