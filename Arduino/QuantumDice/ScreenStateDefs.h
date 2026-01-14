@@ -124,7 +124,6 @@ DiceNumbers selectOneToSix();
 DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop);
 void printDiceStateName(const char *objectName, DiceStates diceState);
 void printDiceStateName2(const char *objectName, DiceStates diceState);
-MeasuredAxises getAxis();
 
 
 #endif /* SCREENSTATEDEFS_H_ */

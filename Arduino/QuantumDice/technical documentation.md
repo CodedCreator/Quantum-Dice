@@ -6,7 +6,7 @@ Created by claude.ai *create technical documentation of the sketch*
 
 The QuantumDice is an ESP32-based electronic dice system that supports both classical and quantum-entangled modes of operation. Three dice units (labeled A, B1, and B2) can wirelessly communicate using ESP-NOW protocol to achieve quantum-entangled behavior, where paired dice always sum to 7 when measured along the same axis.
 
-**Version:** 1.0.0
+**Version:** 1.2.0
 **Hardware Platform:** ESP32 (Arduino Nano ESP32 or ESP32S3 Dev Module)
 **Compiler Requirements:** ESP32 version 3.3.2, Pin Numbering By GPIO (legacy)
 
@@ -139,13 +139,14 @@ The system supports three dice roles determined by MAC address:
 - **ROLE_B2:** Secondary dice 2, can entangle with A
 
 Each dice maintains awareness of:
+
 - `roleSelf` - Own role
 - `roleSister` - Currently entangled partner
 - `roleBrother` - Non-entangled third dice
 
 ### 3. IMU System (IMUhelpers.h/cpp)
 
-The IMU system provides motion detection and orientation sensing using the BNO055 sensor.
+The IMU system provides motion detection, orientation sensing, and tumble detection using the BNO055 sensor through a polymorphic interface.
 
 #### IMUSensor Base Class
 
@@ -154,45 +155,142 @@ Abstract interface for IMU functionality:
 ```cpp
 class IMUSensor {
 public:
-  virtual void init();
-  virtual void update();
-
+  virtual bool init(bool verbose = false) = 0;
+  virtual void update() = 0;
+  
   // Motion detection
-  bool tumbled(float minRotation);
-  bool isMoving();
-  bool isNotMoving();
-
-  // Orientation
-  float getXGravity();
-  float getYGravity();
-  float getZGravity();
-
-  void reset();
+  virtual bool moving() = 0;
+  virtual bool stable() = 0;
+  
+  // Orientation detection
+  virtual bool on_table() = 0;
+  virtual IMU_Orientation orientation() = 0;
+  virtual String getOrientationString() = 0;
+  
+  // Tumble detection (rotation matrix-based)
+  virtual void resetTumbleDetection() = 0;
+  virtual bool tumbled() = 0;
+  virtual float getTumbleAngle() = 0;
+  virtual void setTumbleThreshold(float threshold) = 0;
+  
+  // Sensor data access
+  virtual float gyroX() = 0;  // deg/s
+  virtual float gyroY() = 0;
+  virtual float gyroZ() = 0;
+  virtual float accelX() = 0;  // m/s²
+  virtual float accelY() = 0;
+  virtual float accelZ() = 0;
+  
+  // Calibration
+  virtual void getCalibration(uint8_t* system, uint8_t* gyro, 
+                              uint8_t* accel, uint8_t* mag) = 0;
+  virtual bool isCalibrated() = 0;
+  
+  // Configuration
+  virtual void setMotionThreshold(float threshold) = 0;
+  virtual void setStableThreshold(float threshold) = 0;
+  virtual void setAxisRemap(uint8_t config, uint8_t sign) = 0;
 };
 ```
 
 #### BNO055IMUSensor Implementation
 
-Implements the IMUSensor interface using the Adafruit BNO055 library.
+Concrete implementation of the IMUSensor interface using the Adafruit BNO055 library.
 
 **Key Features:**
-- Automatic calibration data loading from EEPROM (addresses 0x0000-0x001F)
-- Tumble detection using quaternion rotation tracking
-- Gravity vector measurement for die face detection
-- Movement detection with configurable threshold (0.7 m/s²)
+
+- Custom axis remapping support (default: X↔Z swap for vertical mounting)
+- Rotation matrix-based tumble detection (insensitive to vertical axis rotation)
+- Orientation detection (identifies which face is down)
+- Motion and stability detection with configurable thresholds
+- Debug functions for troubleshooting rotation tracking
+- Microsecond-precision timing for accurate rotation calculations
 
 **Tumble Detection Algorithm:**
+Uses rotation matrices to track orientation changes while remaining insensitive to vertical axis rotation (spinning):
 
-1. Track initial "up" vector at rest
-2. Continuously update "up" vector using gyroscope rotation data
-3. Calculate rotation angle between initial and current up vectors
-4. Trigger tumble when rotation exceeds threshold (configurable, default ~0.5 revolutions)
+1. **Initialize Reference:** Capture current "up" direction from gravity vector
+   - Normalize acceleration vector (invert since gravity points down)
+   - Store as reference "up" vector: `(xUpStart, yUpStart, zUpStart)`
 
-**Movement Detection:**
+2. **Track Rotation:** Apply sequential rotation matrices based on gyroscope data
+   - Convert BNO055 output from deg/s to rad/s
+   - Apply X, Y, and Z axis rotations to update current "up" vector
+   - Renormalize vector after each update to prevent floating-point drift
 
-Uses linear acceleration magnitude with hysteresis:
-- Moving: magnitude > 0.7 m/s²
-- Stable: magnitude < 0.7 m/s² for > 200ms
+3. **Detect Tumble:** Compare current and reference orientations using dot product
+   - Calculate: `dotProduct = xUp·xUpStart + yUp·yUpStart + zUp·zUpStart`
+   - Convert to angle: `angle = acos(dotProduct)`
+   - Trigger when `dotProduct < threshold` (e.g., 0.707 for 45° rotation)
+
+4. **Key Advantage:** Dot product measures only angle between vectors, not rotation around them
+   - Spinning on table (Z-axis rotation) ≈ no change in dot product
+   - Rolling motion (tumbling) = significant change in dot product
+
+**Threshold Semantics:**
+
+- Threshold is stored as **cosine of the rotation angle**
+- Common values:
+  - `0.866` = 30° (sensitive)
+  - `0.707` = 45° (default, balanced)
+  - `0.500` = 60° (moderate)
+  - `0.000` = 90° (loose)
+
+**Motion Detection:**
+Uses acceleration magnitude changes with counter-based stability tracking:
+
+- **Motion Trigger:** Acceleration change > 0.5 m/s² (configurable)
+- **Stability Trigger:** Acceleration change < 0.15 m/s² for ≥5 consecutive samples
+- **Hysteresis:** Gradual counter decay prevents oscillation between states
+
+**Orientation Detection:**
+Determines which axis is aligned with gravity:
+
+- Valid orientations: `Z_UP`, `Z_DOWN`, `X_UP`, `X_DOWN`, `Y_UP`, `Y_DOWN`
+- Thresholds: Gravity magnitude 9.0-10.5 m/s², other axes < 2.0 m/s²
+- Returns `TILTED` when no axis is clearly aligned
+
+**Initialization:**
+
+```cpp
+bool init(bool verbose = false)
+```
+
+- Detects BNO055 sensor on I2C bus
+- Applies custom axis remapping via direct register writes
+- Enables external crystal for improved accuracy
+- Waits for sensible readings (7-12 m/s² range)
+- Stabilizes baseline over multiple samples
+- Returns `true` on success, `false` on failure
+
+**Debug Functions:**
+
+- `getDebugDotProduct()`: Returns current alignment (-1.0 to 1.0)
+- `getDebugUpVector()`: Gets current tracked "up" vector
+- `getDebugUpStart()`: Gets reference "up" vector
+- `printDebugInfo()`: Prints comprehensive state to Serial
+
+**Usage Example:**
+
+```cpp
+IMUSensor* imu = new BNO055IMUSensor();
+imu->init(true);  // verbose initialization
+
+void loop() {
+  imu->update();  // Call regularly (every 100ms recommended)
+  
+  if (imu->moving()) {
+    // Handle motion
+  }
+  
+  if (imu->tumbled()) {
+    float angle = imu->getTumbleAngle();
+    Serial.println("Tumbled: " + String(angle) + "°");
+  }
+  
+  Serial.println(imu->getOrientationString());
+}
+```
 
 ### 4. ESP-NOW Communication (EspNowSensor.h)
 
@@ -232,6 +330,7 @@ typedef struct {
 #### RSSI-Based Proximity Detection
 
 Entanglement only occurs when dice are physically close:
+
 - Uses promiscuous WiFi mode to capture RSSI
 - Configurable threshold (stored in EEPROM, typically -50 dBm)
 - Prevents accidental entanglement from a distance
@@ -256,6 +355,7 @@ Six GC9A01A circular displays (240x240px) are mapped to die faces:
 #### Screen States
 
 Displays can show:
+
 - **Numbers:** 1-6 rendered with dots
 - **Symbols:** Circle, Cross, Circle+Cross
 - **Animations:** Mixed 1-6 animation (waiting state)
@@ -265,6 +365,7 @@ Displays can show:
 #### Background Colors
 
 Each axis has configurable background colors (RGB565):
+
 - X-axis: Configurable (EEPROM)
 - Y-axis: Configurable (EEPROM)
 - Z-axis: Configurable (EEPROM)
@@ -507,6 +608,7 @@ Set `DEBUG 0` to disable serial output in production.
 Baud rate: 115200
 
 **Boot Sequence Output:**
+
 - Firmware version
 - Dice ID
 - Board type (NANO/DEVKIT)
@@ -516,6 +618,7 @@ Baud rate: 115200
 - Hardware pin assignments
 
 **Runtime Output:**
+
 - State transitions
 - Entanglement events
 - IMU measurements
@@ -587,6 +690,7 @@ Baud rate: 115200
 ### External Resources
 
 Fonts:
+
 - FreeSans18pt7b
 - FreeSansBold18pt7b
 - FreeSansOblique12pt7b
@@ -600,6 +704,7 @@ Fonts:
 The system halts execution on:
 
 1. **Missing Configuration**
+
    ```cpp
    if (!loadConfigFromEEPROM()) {
      while(1) { delay(1000); }  // Infinite loop
@@ -607,6 +712,7 @@ The system halts execution on:
    ```
 
 2. **Invalid Role Assignment**
+
    ```cpp
    assert(roleSelf != Roles::NONE);
    ```
@@ -649,6 +755,7 @@ The companion sketch `QuantumDiceInitTool` is used to program EEPROM configurati
 **Location:** `Arduino/QuantumDiceInitTool/QuantumDiceInitTool.ino`
 
 **Purpose:**
+
 - Write dice ID and MAC addresses
 - Set display colors
 - Configure hardware variant (NANO/DEVKIT, SMD/HDR)
@@ -725,12 +832,14 @@ See [Version.h](Arduino/QuantumDice/Version.h) for complete history.
 ## Technical Support
 
 For configuration issues, consult:
+
 - Serial debug output at 115200 baud
 - EEPROM memory map printout during boot
 - Hardware pin configuration display
 - IMU calibration status messages
 
 **Critical First Steps:**
+
 1. Verify EEPROM contains valid configuration
 2. Check MAC addresses match between all three dice
 3. Ensure IMU calibration data is loaded
@@ -742,4 +851,3 @@ For configuration issues, consult:
 **Document Version:** 1.0
 **Last Updated:** 2025-01-21
 **Generated from Firmware Version:** 1.0.0
-

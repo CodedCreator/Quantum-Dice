@@ -316,16 +316,3 @@ DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop) {
       break;
   }
 }
-MeasuredAxises getAxis(IMUSensor *imuSensor) {
-  //detection algoritmn: which side up?
-  if (withinBounds(abs(imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
-    return MeasuredAxises::ZAXIS;
-  } else if (withinBounds(abs(imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
-    return MeasuredAxises::YAXIS;
-  } else if (withinBounds(abs(imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
-    return MeasuredAxises::XAXIS;
-  } else {
-    debugln("no clear axis");
-    return MeasuredAxises::UNDEFINED;
-  }
-}
