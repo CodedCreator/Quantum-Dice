@@ -568,7 +568,6 @@ void StateMachine::whileWAITFORTHROW() {
     entangleStopRcv = false;
     changeState(Trigger::entangleStopReceived);
   }
-  /*
   //diceA initiates entanglement request, only to dice not entangled to
   if (roleSelf == Roles::ROLE_A) {
     if (diceStateSelf != DiceStates::ENTANGLED_AB1) {  //SINGLE or ENTANGLED_AB2
@@ -626,7 +625,6 @@ void StateMachine::whileWAITFORTHROW() {
     }
     refreshScreens();  //update screens ackordingly
   }
-  */
 }
 
 void StateMachine::enterTHROWING() {
