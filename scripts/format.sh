@@ -16,7 +16,7 @@ fi
 
 # -------- Find files --------
 FILES=$(git ls-files \
-  | grep -E '\.(cpp|cxx|cc|hpp|h)$' \
+  | grep -E '\.(cpp|cxx|cc|hpp|h|ino)$' \
   | grep -v -E 'build/|ImageLibrary/')
 
 if [ -z "$FILES" ]; then
@@ -29,9 +29,16 @@ echo "Applying clang-tidy auto-fixes..."
 echo "$FILES" | xargs -r -P 4 \
   clang-tidy -p "$BUILD_DIR" --quiet --fix
 
+CLANG_FORMAT_EXEC = /usr/lib/llvm18/bin/clang-format
+if [ -x "$CLANG_FORMAT_EXEC" ]; then
+	CLANG_FORMAT="$CLANG_FORMAT_EXEC"
+else
+	CLANG_FORMAT="clang-format"
+fi
+
 echo "Running clang-format..."
 echo "$FILES" | xargs -r \
-  clang-format -i -style=file
+  $CLANG_FORMAT_EXEC -i -style=file
 
 # -------- Report remaining issues --------
 echo "--- Reporting remaining issues ---"

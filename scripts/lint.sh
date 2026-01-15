@@ -25,7 +25,7 @@ mv "$BUILD_DIR/compile_commands_cleaned.json" "$BUILD_DIR/compile_commands.json"
 
 # -------- Find files --------
 FILES=$(git ls-files \
-  | grep -E '\.(cpp|cxx|cc|hpp|h)$' \
+  | grep -E '\.(cpp|cxx|cc|hpp|h|ino)$' \
   | grep -v -E 'build/|ImageLibrary/')
 
 if [ -z "$FILES" ]; then

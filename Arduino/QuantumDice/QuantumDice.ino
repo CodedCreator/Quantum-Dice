@@ -18,76 +18,76 @@ StateMachine stateMachine;
 unsigned long previousMillisWatchDog = 0;
 
 void setup() {
-  // Make sure power switch keeps on - do this FIRST before anything else
-  pinMode(REGULATOR_PIN, OUTPUT);
-  digitalWrite(REGULATOR_PIN, LOW);
+    // Make sure power switch keeps on - do this FIRST before anything else
+    pinMode(REGULATOR_PIN, OUTPUT);
+    digitalWrite(REGULATOR_PIN, LOW);
 
-  // Initialize serial for debugging
-  initSerial();  // delay(1000) included
+    // Initialize serial for debugging
+    initSerial();  // delay(1000) included
 
-  // Initialize EEPROM ONCE for both config and IMU calibration
-  initEEPROM();
+    // Initialize EEPROM ONCE for both config and IMU calibration
+    initEEPROM();
 
-  // Load dice configuration from EEPROM
-  // This MUST be done early because it initializes hwPins which are needed for displays
-  if (!loadConfigFromEEPROM()) {
-    Serial.println("FATAL ERROR: Cannot load configuration!");
-    Serial.println("Please flash configuration using the setup sketch.");
-    // Halt execution - can't proceed without valid configuration
-    while (1) {
-      delay(1000);
+    // Load dice configuration from EEPROM
+    // This MUST be done early because it initializes hwPins which are needed for displays
+    if (!loadConfigFromEEPROM()) {
+        Serial.println("FATAL ERROR: Cannot load configuration!");
+        Serial.println("Please flash configuration using the setup sketch.");
+        // Halt execution - can't proceed without valid configuration
+        while (1) {
+            delay(1000);
+        }
     }
-  }
 
-  // Print version and configuration info
-  Serial.println("\n" __FILE__ " " __DATE__ " " __TIME__);
-  Serial.print("FW: ");
-  Serial.print(VERSION);
-  Serial.print(" - Dice ID: ");
-  Serial.println(currentConfig.diceId);  // Use diceId from config
-  Serial.print("Board type: ");
-  Serial.println(currentConfig.isNano ? "NANO" : "DEVKIT");  // Use config instead of defines
+    // Print version and configuration info
+    Serial.println("\n" __FILE__ " " __DATE__ " " __TIME__);
+    Serial.print("FW: ");
+    Serial.print(VERSION);
+    Serial.print(" - Dice ID: ");
+    Serial.println(currentConfig.diceId);  // Use diceId from config
+    Serial.print("Board type: ");
+    Serial.println(currentConfig.isNano ? "NANO" : "DEVKIT");  // Use config instead of defines
 
-  // Initialize displays - now uses hwPins from loaded configuration
-  initDisplays();
+    // Initialize displays - now uses hwPins from loaded configuration
+    initDisplays();
 
-  // Show startup logo during setup
-  displayQLab(ALL);
+    // Show startup logo during setup
+    displayQLab(ALL);
 
 
-  // Initialize IMU sensor
-  // This still works exactly the same
-  IMUSensor *imuSensor;
-  imuSensor = new BNO055IMUSensor();
-  if (!imuSensor->init(true)) {  // Show initialization progress
-    Serial.println("Failed to initialize sensor!");
-  }
-  if (currentConfig.isNano) imuSensor->setAxisRemap(0x06, 0x06);  //to be adapted.
-  //imuSensor->setTumbleThreshold(currentConfig.tumbleConstant);    //0.2
+    // Initialize IMU sensor
+    // This still works exactly the same
+    IMUSensor *imuSensor;
+    imuSensor = new BNO055IMUSensor();
+    if (!imuSensor->init(true)) {  // Show initialization progress
+        Serial.println("Failed to initialize sensor!");
+    }
+    if (currentConfig.isNano) imuSensor->setAxisRemap(0x06, 0x06);  //to be adapted.
+                                                                    //imuSensor->setTumbleThreshold(currentConfig.tumbleConstant);    //0.2
 
-  imuSensor->update();
-  imuSensor->resetTumbleDetection();
+    imuSensor->update();
+    imuSensor->resetTumbleDetection();
 
-  // Set IMU sensor in state machine
-  stateMachine.setImuSensor(imuSensor);
+    // Set IMU sensor in state machine
+    stateMachine.setImuSensor(imuSensor);
 
-  // Initialize button
-  initButton();
+    // Initialize button
+    initButton();
 
-  // Initialize the state machine - this sets up ESP-NOW with config MACs
-  stateMachine.begin();
+    // Initialize the state machine - this sets up ESP-NOW with config MACs
+    stateMachine.begin();
 
-  Serial.println("Setup complete!");
-  Serial.println("==================================\n");
+    Serial.println("Setup complete!");
+    Serial.println("==================================\n");
 }
 
 void loop() {
-  static unsigned long lastUpdateTime = 0;
-  unsigned long currentTime = millis();
-  if (currentTime - lastUpdateTime >= UPDATE_INTERVAL) {
-    button.loop();
-    stateMachine.update();
-    //   refreshScreens();
-    //   sendWatchDog(); //sendWatchDog removed. Is called at every onEntry function after the states are set. More efficient.
-  }
+    static unsigned long lastUpdateTime = 0;
+    unsigned long currentTime = millis();
+    if (currentTime - lastUpdateTime >= UPDATE_INTERVAL) {
+        button.loop();
+        stateMachine.update();
+        //   refreshScreens();
+        //   sendWatchDog(); //sendWatchDog removed. Is called at every onEntry function after the states are set. More efficient.
+    }
 }
