@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-static bool isDeviceA = false;
+static bool isDeviceA  = false;
 static bool isDeviceB1 = false;
 static bool isDeviceB2 = false;
 

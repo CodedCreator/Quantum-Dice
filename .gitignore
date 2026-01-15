@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 3D print files/~$Bill of Material quantum dice.xlsx
 Arduino/QuantumDiceInitTool/build/esp32.esp32.esp32s3/QuantumDiceInitTool.ino.partitions.bin
 Arduino/QuantumDiceInitTool/build/esp32.esp32.esp32s3/QuantumDiceInitTool.ino.merged.bin
@@ -16,3 +17,10 @@ Arduino/QuantumDice/build/esp32.esp32.esp32s3/QuantumDice.ino.bin
 Arduino/QuantumDice/build/esp32.esp32.esp32s3/QuantumDice. V1.0.1.bin
 *.bin
 Arduino/~$O08x Stability Classifier Configuration Guide.docx
+=======
+Arduino/**/build/
+
+*.bin
+*.elf
+*.map
+>>>>>>> origin/main

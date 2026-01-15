@@ -2,7 +2,7 @@
 #ifndef SCREENSTATEDEFS_H_
 #define SCREENSTATEDEFS_H_
 
-#include "Statemachine.h"  // Ensure this is included
+#include "StateMachine.h"  // Ensure this is included
 //truth table at the end of this file
 
 extern State stateSelf, stateSister;  //use of the StateMachine inputs
