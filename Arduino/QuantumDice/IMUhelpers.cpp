@@ -1,46 +1,497 @@
+/*
+   IMUhelpers.cpp - Implementation of polymorphic IMU sensor interface
+   */
+
 #include "IMUhelpers.h"
 
-#include "Adafruit_Sensor.h"
-#include "Arduino.h"
-#include "defines.h"
-#include "handyHelpers.h" // Include for EEPROM address definitions
+// ============================================
+// BNO055IMUSensor IMPLEMENTATION
+// ============================================
 
-//***************************** IMU independant functions
-void IMUSensor::updateUpVector(double deltaTime) {
-    // Calculate the new Up
-    double xRot = _xGyro * deltaTime; // rotation angle over the last deltaTime
-    double yRot = _yGyro * deltaTime;
-    double zRot = _zGyro * deltaTime;
+// Constructor
+BNO055IMUSensor::BNO055IMUSensor() : _bno(55) {
+    // Initialize default thresholds
+    _motionThreshold = 0.5;        // m/s²
+    _stableThreshold = 0.15;       // m/s²
+    _stableCountRequired = 5;      // samples
+    _flatGravityMin = 9.0;         // m/s²
+    _flatGravityMax = 10.5;        // m/s²
+    _flatOtherAxisMax = 2.0;       // m/s²
 
-    // // Exponential moving average filter
-    // (https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average)
-    // xRot = ALPHA * xRot + (1 - ALPHA) * _xRotPrev;
-    // yRot = ALPHA * yRot + (1 - ALPHA) * _yRotPrev;
-    // zRot = ALPHA * zRot + (1 - ALPHA) * _zRotPrev;
-    //
-    // _xRotPrev = xRot;
-    // _yRotPrev = yRot;
-    // _zRotPrev = zRot;
+    // Default axis remap: X↔Z swap with Y unchanged
+    _axisRemapConfig = 0x06;       // Z gets X, Y gets Y, X gets Z
+    _axisRemapSign = 0x01;         // Sign configuration 0x06
 
-    // debug("Rotation ");
-    // debug(deltaTime);
-    // debug(", ");
-    // debug(xRot);
-    // debug(", ");
-    // debug(yRot);
-    // debug(", ");
-    // debugln(zRot);
+    // Initialize tumble detection (rotation matrix-based)
+    _xUp = 0.0;
+    _yUp = 0.0;
+    _zUp = 1.0;                    // Default to Z-up
+    _xUpStart = 0.0;
+    _yUpStart = 0.0;
+    _zUpStart = 1.0;
+    _prevMicros = 0;
+    _tumbleThreshold = 0.707;      // cos(45°) by default
+    _tumbleDetected = false;
+    _tumbleReferenceSet = false;
+    _firstUpdateAfterReset = false;
 
-    // x-axis rotation matrix
-    double xUp = _xUp;
-    double yUp = _yUp * cos(xRot) - _zUp * sin(xRot);
-    double zUp = _yUp * sin(xRot) + _zUp * cos(xRot);
+    // Initialize state
+    _prevAccelMag = 0;
+    _currentAccelMag = 0;
+    _accelChange = 0;
+    _isMoving = false;
+    _stableCounter = 0;
+    _currentOrientation = ORIENTATION_UNKNOWN;
+}
+
+// ============================================
+// CORE FUNCTIONS
+// ============================================
+
+bool BNO055IMUSensor::init(bool verbose) {
+    // Initialize I2C and BNO055
+    if (verbose) Serial.print("Initializing BNO055... ");
+
+    if (!_bno.begin()) {
+        if (verbose) Serial.println("FAILED! Sensor not detected.");
+        return false;  // Sensor not detected
+    }
+
+    if (verbose) Serial.println("detected.");
+    delay(100);
+
+    // Apply custom axis remapping
+    if (verbose) Serial.print("Applying axis remapping... ");
+    applyAxisRemap();
+    if (verbose) Serial.println("done.");
+
+    // Use external crystal for better accuracy
+    _bno.setExtCrystalUse(true);
+
+    delay(100);
+
+    // Wait for sensor to produce sensible readings
+    // This is especially important with ESP32 and I2C initialization
+    if (verbose) Serial.print("Waiting for stable readings... ");
+
+    unsigned long startTime = millis();
+    const unsigned long timeout = 5000;  // 5 second timeout
+    bool sensibleReading = false;
+    int attempts = 0;
+
+    while (!sensibleReading && (millis() - startTime < timeout)) {
+        // Read acceleration
+        _accel = _bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+        float mag = sqrt(_accel.x()*_accel.x() + _accel.y()*_accel.y() + _accel.z()*_accel.z());
+
+        // Check if reading is sensible (close to gravity, not zero or wildly off)
+        // Valid range: 7-12 m/s² (allows for some movement during init)
+        if (mag > 7.0 && mag < 12.0) {
+            sensibleReading = true;
+            _prevAccelMag = mag;
+            _currentAccelMag = mag;
+            if (verbose) {
+                Serial.print("OK (");
+                Serial.print(mag, 2);
+                Serial.print(" m/s² after ");
+                Serial.print(attempts);
+                Serial.println(" attempts)");
+            }
+        } else {
+            attempts++;
+            if (verbose && attempts % 10 == 0) Serial.print(".");
+            delay(50);  // Wait a bit before next reading
+        }
+    }
+
+    if (!sensibleReading) {
+        if (verbose) {
+            Serial.println("\nFAILED! Timeout - sensor not producing valid readings.");
+            Serial.println("Check connections and try again.");
+        }
+        return false;  // Timeout - sensor not producing valid readings
+    }
+
+    // Do a few more updates to stabilize the baseline
+    if (verbose) Serial.print("Stabilizing baseline... ");
+    for (int i = 0; i < 5; i++) {
+        _accel = _bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+        _gyro = _bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+        _currentAccelMag = sqrt(_accel.x()*_accel.x() + _accel.y()*_accel.y() + _accel.z()*_accel.z());
+        _prevAccelMag = _currentAccelMag;
+        delay(20);
+    }
+    if (verbose) Serial.println("done.");
+
+    if (verbose) Serial.println("✓ BNO055 initialization complete!");
+
+    return true;  // Success
+}
+
+void BNO055IMUSensor::update() {
+    // Calculate delta time for rotation matrices
+    unsigned long currentMicros = micros();
+    float deltaTime = (currentMicros - _prevMicros) * 1e-6;  // Convert to seconds
+    _prevMicros = currentMicros;
+
+    // Read sensor data
+    _accel = _bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+    _gyro = _bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+
+    // Calculate acceleration magnitude
+    _currentAccelMag = sqrt(_accel.x()*_accel.x() + _accel.y()*_accel.y() + _accel.z()*_accel.z());
+    _accelChange = abs(_currentAccelMag - _prevAccelMag);
+
+    // Motion detection logic
+    if (_accelChange > _motionThreshold) {
+        // Significant change = motion detected
+        _isMoving = true;
+        _stableCounter = 0;
+    }
+    else if (_accelChange < _stableThreshold) {
+        // Very little change = potentially stable
+        _stableCounter++;
+
+        if (_isMoving && _stableCounter >= _stableCountRequired) {
+            // Been stable long enough
+            _isMoving = false;
+        }
+    }
+    else {
+        // In between - small movements
+        if (_stableCounter > 0) {
+            _stableCounter--;  // Slowly decay stable counter
+        }
+    }
+
+    // Detect orientation
+    _currentOrientation = detectOrientation();
+
+    // Update up vector using rotation matrices (if reference is set)
+    if (_tumbleReferenceSet) {
+        // Skip first update after reset to avoid bad deltaTime
+        if (_firstUpdateAfterReset) {
+            _firstUpdateAfterReset = false;
+            _prevMicros = currentMicros;  // Reset timing
+        }
+        else if (deltaTime > 0.0 && deltaTime < 1.0) {
+            updateUpVector(deltaTime);
+
+            // Check for tumble by comparing current up vector with initial reference
+            float dotProduct = _xUp * _xUpStart + _yUp * _yUpStart + _zUp * _zUpStart;
+
+            // Clamp to valid range for acos
+            dotProduct = constrain(dotProduct, -1.0, 1.0);
+
+            // Check if tumbled beyond threshold
+            if (dotProduct < _tumbleThreshold) {
+                _tumbleDetected = true;
+            }
+        }
+    }
+
+    // Update previous magnitude for next iteration
+    _prevAccelMag = _currentAccelMag;
+}
+
+// ============================================
+// MOTION DETECTION
+// ============================================
+
+bool BNO055IMUSensor::moving() {
+    return _isMoving;
+}
+
+bool BNO055IMUSensor::stable() {
+    return !_isMoving && (_stableCounter >= _stableCountRequired);
+}
+
+// ============================================
+// ORIENTATION DETECTION
+// ============================================
+
+bool BNO055IMUSensor::on_table() {
+    // Check if orientation is one of the flat positions (not tilted or unknown)
+    return (_currentOrientation != ORIENTATION_UNKNOWN &&
+            _currentOrientation != ORIENTATION_TILTED);
+}
+
+IMU_Orientation BNO055IMUSensor::orientation() {
+    return _currentOrientation;
+}
+
+String BNO055IMUSensor::getOrientationString() {
+    switch (_currentOrientation) {
+        case ORIENTATION_Z_UP:
+            return "Z+ UP (Vertical - Normal)";
+        case ORIENTATION_Z_DOWN:
+            return "Z- UP (Vertical - Inverted)";
+        case ORIENTATION_X_UP:
+            return "X+ UP";
+        case ORIENTATION_X_DOWN:
+            return "X- UP";
+        case ORIENTATION_Y_UP:
+            return "Y+ UP";
+        case ORIENTATION_Y_DOWN:
+            return "Y- UP";
+        case ORIENTATION_TILTED:
+            return "TILTED (not aligned)";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+// ============================================
+// GYROSCOPE
+// ============================================
+
+float BNO055IMUSensor::gyroX() {
+    return _gyro.x();
+}
+
+float BNO055IMUSensor::gyroY() {
+    return _gyro.y();
+}
+
+float BNO055IMUSensor::gyroZ() {
+    return _gyro.z();
+}
+
+// ============================================
+// ACCELEROMETER
+// ============================================
+
+float BNO055IMUSensor::accelX() {
+    return _accel.x();
+}
+
+float BNO055IMUSensor::accelY() {
+    return _accel.y();
+}
+
+float BNO055IMUSensor::accelZ() {
+    return _accel.z();
+}
+
+float BNO055IMUSensor::getAccelMagnitude() {
+    return _currentAccelMag;
+}
+
+float BNO055IMUSensor::getAccelChange() {
+    return _accelChange;
+}
+
+// ============================================
+// CALIBRATION
+// ============================================
+
+void BNO055IMUSensor::getCalibration(uint8_t* system, uint8_t* gyro, uint8_t* accel, uint8_t* mag) {
+    _bno.getCalibration(system, gyro, accel, mag);
+}
+
+bool BNO055IMUSensor::isCalibrated() {
+    uint8_t system, gyro, accel, mag;
+    _bno.getCalibration(&system, &gyro, &accel, &mag);
+    return (system >= 2 && gyro >= 2 && accel >= 2 && mag >= 2);
+}
+
+// ============================================
+// TUMBLE DETECTION
+// ============================================
+
+void BNO055IMUSensor::resetTumbleDetection() {
+    // Get current acceleration (gravity) vector
+    _accel = _bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+
+    // Calculate magnitude
+    float mag = sqrt(_accel.x()*_accel.x() + _accel.y()*_accel.y() + _accel.z()*_accel.z());
+
+    // Normalize to unit vector (invert because gravity points down, we want "up")
+    // Avoid division by zero
+    if (mag > 0.1) {
+        _xUpStart = -_accel.x() / mag;
+        _yUpStart = -_accel.y() / mag;
+        _zUpStart = -_accel.z() / mag;
+
+        // Initialize current up vector to same as start
+        _xUp = _xUpStart;
+        _yUp = _yUpStart;
+        _zUp = _zUpStart;
+
+        // Reset timing
+        _prevMicros = micros();
+
+        // Clear detection flags
+        _tumbleDetected = false;
+        _tumbleReferenceSet = true;
+        _firstUpdateAfterReset = true;  // Skip first update to avoid bad deltaTime
+    }
+}
+
+bool BNO055IMUSensor::tumbled() {
+    return _tumbleDetected;
+}
+
+float BNO055IMUSensor::getTumbleAngle() {
+    if (!_tumbleReferenceSet) {
+        return 0.0;  // No reference set
+    }
+
+    // Calculate dot product between current and initial up vectors
+    float dotProduct = _xUp * _xUpStart + _yUp * _yUpStart + _zUp * _zUpStart;
+
+    // Clamp to valid range for acos
+    dotProduct = constrain(dotProduct, -1.0, 1.0);
+
+    // Convert to angle in degrees
+    float angleRadians = acos(dotProduct);
+    float angleDegrees = angleRadians * 57.2958;  // 180/PI
+
+    return angleDegrees;
+}
+
+// ============================================
+// CONFIGURATION & TUNING
+// ============================================
+
+void BNO055IMUSensor::setMotionThreshold(float threshold) {
+    _motionThreshold = threshold;
+}
+
+void BNO055IMUSensor::setStableThreshold(float threshold) {
+    _stableThreshold = threshold;
+}
+
+void BNO055IMUSensor::setStableCount(int count) {
+    _stableCountRequired = count;
+}
+
+void BNO055IMUSensor::setTumbleThreshold(float threshold) {
+    _tumbleThreshold = threshold;  // Threshold is cosine of angle
+                                   // Reset tumble detection when threshold changes
+    _tumbleDetected = false;
+}
+
+void BNO055IMUSensor::setOrientationThresholds(float minGravity, float maxGravity, float maxOtherAxis) {
+    _flatGravityMin = minGravity;
+    _flatGravityMax = maxGravity;
+    _flatOtherAxisMax = maxOtherAxis;
+}
+
+// ============================================
+// AXIS REMAPPING
+// ============================================
+
+void BNO055IMUSensor::setAxisRemap(uint8_t config, uint8_t sign) {
+    _axisRemapConfig = config;
+    _axisRemapSign = sign;
+    applyAxisRemap();
+}
+
+void BNO055IMUSensor::getAxisRemap(uint8_t* config, uint8_t* sign) {
+    *config = readRegister(BNO055_AXIS_MAP_CONFIG_ADDR);
+    *sign = readRegister(BNO055_AXIS_MAP_SIGN_ADDR);
+}
+
+// ============================================
+// PRIVATE HELPER FUNCTIONS
+// ============================================
+
+IMU_Orientation BNO055IMUSensor::detectOrientation() {
+    float x = _accel.x();
+    float y = _accel.y();
+    float z = _accel.z();
+
+    // Note: Accelerometer reads NEGATIVE when axis points UP (gravity pulls down)
+    // and POSITIVE when axis points DOWN (accelerating toward ground)
+
+    // Check which axis is aligned with gravity
+    bool xDown = (abs(x) > _flatGravityMin && abs(x) < _flatGravityMax);
+    bool yDown = (abs(y) > _flatGravityMin && abs(y) < _flatGravityMax);
+    bool zDown = (abs(z) > _flatGravityMin && abs(z) < _flatGravityMax);
+
+    // Z-axis aligned (physical X+ up = normal vertical)
+    if (zDown && abs(x) < _flatOtherAxisMax && abs(y) < _flatOtherAxisMax) {
+        return (z < 0) ? ORIENTATION_Z_UP : ORIENTATION_Z_DOWN;
+    }
+
+    // X-axis aligned (tilted toward physical Z direction)
+    if (xDown && abs(y) < _flatOtherAxisMax && abs(z) < _flatOtherAxisMax) {
+        return (x < 0) ? ORIENTATION_X_UP : ORIENTATION_X_DOWN;
+    }
+
+    // Y-axis aligned (tilted sideways)
+    if (yDown && abs(x) < _flatOtherAxisMax && abs(z) < _flatOtherAxisMax) {
+        return (y < 0) ? ORIENTATION_Y_UP : ORIENTATION_Y_DOWN;
+    }
+
+    // Not aligned with any axis
+    return ORIENTATION_TILTED;
+}
+
+void BNO055IMUSensor::applyAxisRemap() {
+    // Must be in CONFIG mode to change axis remap
+    writeRegister(BNO055_OPR_MODE_ADDR, 0x00);
+    delay(25);
+
+    // Write custom axis remap configuration
+    writeRegister(BNO055_AXIS_MAP_CONFIG_ADDR, _axisRemapConfig);
+    delay(10);
+
+    // Write custom axis sign configuration
+    writeRegister(BNO055_AXIS_MAP_SIGN_ADDR, _axisRemapSign);
+    delay(10);
+
+    // Switch to NDOF mode (all sensors + fusion)
+    writeRegister(BNO055_OPR_MODE_ADDR, 0x0C);
+    delay(25);
+}
+
+uint8_t BNO055IMUSensor::readRegister(uint8_t reg) {
+    uint8_t value;
+    Wire.beginTransmission(BNO055_ADDRESS_A);
+    Wire.write(reg);
+    Wire.endTransmission();
+    Wire.requestFrom(BNO055_ADDRESS_A, (uint8_t)1);
+    value = Wire.read();
+    return value;
+}
+
+void BNO055IMUSensor::writeRegister(uint8_t reg, uint8_t value) {
+    Wire.beginTransmission(BNO055_ADDRESS_A);
+    Wire.write(reg);
+    Wire.write(value);
+    Wire.endTransmission();
+    delay(2);
+}
+
+// ============================================
+// TUMBLE DETECTION - ROTATION MATRIX UPDATE
+// ============================================
+
+void BNO055IMUSensor::updateUpVector(float deltaTime) {
+    // BNO055 outputs gyroscope in DEGREES per second, not radians!
+    // Convert to radians per second, then calculate rotation angles
+
+    float xRot = _gyro.x() * DEG_TO_RAD * deltaTime;
+    float yRot = _gyro.y() * DEG_TO_RAD * deltaTime;
+    float zRot = _gyro.z() * DEG_TO_RAD * deltaTime;
+
+    // Apply rotation matrices sequentially: X, then Y, then Z
+    // This updates the current "up" vector based on the rotation
+
+    // X-axis rotation matrix
+    // Rotates around X-axis, affects Y and Z components
+    float xUp = _xUp;
+    float yUp = _yUp * cos(xRot) - _zUp * sin(xRot);
+    float zUp = _yUp * sin(xRot) + _zUp * cos(xRot);
 
     _xUp = xUp;
     _yUp = yUp;
     _zUp = zUp;
 
-    // y-axis
+    // Y-axis rotation matrix
+    // Rotates around Y-axis, affects X and Z components
     xUp = _xUp * cos(yRot) + _zUp * sin(yRot);
     yUp = _yUp;
     zUp = -_xUp * sin(yRot) + _zUp * cos(yRot);
@@ -49,7 +500,8 @@ void IMUSensor::updateUpVector(double deltaTime) {
     _yUp = yUp;
     _zUp = zUp;
 
-    // z-axis
+    // Z-axis rotation matrix
+    // Rotates around Z-axis, affects X and Y components
     xUp = _xUp * cos(zRot) - _yUp * sin(zRot);
     yUp = _xUp * sin(zRot) + _yUp * cos(zRot);
     zUp = _zUp;
@@ -58,344 +510,66 @@ void IMUSensor::updateUpVector(double deltaTime) {
     _yUp = yUp;
     _zUp = zUp;
 
-    // debug("Up (");
-    // debug(_xUp);
-    // debug(", ");
-    // debug(_yUp);
-    // debug(", ");
-    // debug(_zUp);
-    // debugln(")");
-}
+    // Calculate magnitude before normalization
+    float magnitude = sqrt(_xUp * _xUp + _yUp * _yUp + _zUp * _zUp);
 
-void IMUSensor::reset() {
-    _prevMicros = micros();
-
-    float inverseMagnitude
-      = 1.0 / sqrt(_xGravity * _xGravity + _yGravity * _yGravity + _zGravity * _zGravity);
-
-    _xUpStart = -_xGravity * inverseMagnitude; // unit vector
-    _yUpStart = -_yGravity * inverseMagnitude;
-    _zUpStart = -_zGravity * inverseMagnitude;
-
-    _xUp = _xUpStart;
-    _yUp = _yUpStart;
-    _zUp = _zUpStart;
-
-    debug("Reset (");
-    debug(_xUpStart);
-    debug(", ");
-    debug(_yUpStart);
-    debug(", ");
-    debug(_zUpStart);
-    debug(", ");
-    debugln(")");
-}
-
-bool IMUSensor::tumbled(float minRotation) {
-    // debug("Start Up (");
-    // debug(_xUpStart, 2);
-    // debug(", ");
-    // debug(_yUpStart, 2);
-    // debug(", ");
-    // debug(_zUpStart, 2);
-    // debug(", ");
-    // //debugln(")");
-
-    // //debug("Up (");
-    // debug(_xUp, 2);
-    // debug(", ");
-    // debug(_yUp, 2);
-    // debug(", ");
-    // debug(_zUp, 2);
-    // debug(", ");
-    // debugln(")");
-    double dotProduct = _xUp * _xUpStart + _yUp * _yUpStart + _zUp * _zUpStart;
-
-    // Clamp dot product to valid range for acos [-1, 1]
-    dotProduct      = constrain(dotProduct, -1.0, 1.0);
-    double rotation = acos(dotProduct) / TWOPI; // inverse cos of dot product between vectors,
-                                                // normalised (2PI=1.0). Max rotation: 0.5
-
-    if (abs(rotation) > (double)minRotation) {
-        debug("Start Up (");
-        debug(_xUpStart);
-        debug(", ");
-        debug(_yUpStart);
-        debug(", ");
-        debug(_zUpStart);
-        debug(", ");
-        debugln(")");
-
-        debug("Up (");
-        debug(_xUp);
-        debug(", ");
-        debug(_yUp);
-        debug(", ");
-        debug(_zUp);
-        debug(", ");
-        debugln(")");
-        debug("Rotation: ");
-        debug(rotation);
-        debugln();
-        reset();
-        return true;
-    }
-    return false;
-}
-
-bool IMUSensor::isMoving() {
-    // Check if magnitude is below the threshold. If it was moving, set it to
-    // false and keep the timestamp of that moment
-    if (_magnitude < threshold) {
-        if (_isMoving) {
-            _lastMovementTime = millis();
-            _isMoving         = false;
-        }
-    } else {
-        _isMoving = true;
-    }
-    if (!_isMoving && (millis() - _lastMovementTime > stableTime)) {
-        return false;
-    } else {
-        return true;
+    // CRITICAL: Renormalize the up vector to prevent drift
+    // Floating-point errors accumulate, causing magnitude to drift from 1.0
+    // This would make dot product calculations unreliable
+    if (magnitude > 0.01) {  // Avoid division by zero
+        _xUp /= magnitude;
+        _yUp /= magnitude;
+        _zUp /= magnitude;
     }
 }
 
-Adafruit_BNO055 AccGyro = Adafruit_BNO055(55, 0x28, &Wire);
-sensors_event_t angVelocityData, linearAccelData, gravityData;
+// ============================================
+// DEBUG FUNCTIONS
+// ============================================
 
-void BNO055IMUSensor::init() {
-    Wire.begin();
-    // Note: EEPROM is already initialized by initEEPROM() in handyHelpers
-    // Don't call EEPROM.begin() here again
-
-    while (!_accGyro.begin()) {
-        debugln("BNO device not detected at default I2C address");
-        delay(100);
-    }
-    debugln("BNO device found!");
-
-    // Try to restore calibration data from EEPROM
-    restoreCalibrationData();
-
-    // Set external crystal use (must be done after loading calibration)
-    _accGyro.setExtCrystalUse(true);
-
-    // Wait for valid gravity data before calling reset
-    debugln("Waiting for valid gravity data...");
-    int   attempts         = 0;
-    float gravityMagnitude = 0.0;
-
-    do {
-        delay(100);
-        update(); // Get sensor reading
-        attempts++;
-
-        gravityMagnitude
-          = sqrt(_xGravity * _xGravity + _yGravity * _yGravity + _zGravity * _zGravity);
-
-        debug("Attempt ");
-        debug(attempts);
-        debug(" - Gravity: (");
-        debug(_xGravity);
-        debug(", ");
-        debug(_yGravity);
-        debug(", ");
-        debug(_zGravity);
-        debug(") Magnitude: ");
-        debugln(gravityMagnitude);
-
-    } while (gravityMagnitude < 8.0 && attempts < 100);
-
-    if (gravityMagnitude >= 8.0) {
-        reset();
-        debugln("Up vector initialized successfully");
-    } else {
-        debugln("Warning: Failed to get valid gravity data after 100 attempts!");
-        // Set a default up vector as fallback
-        _xUp      = 0.0;
-        _yUp      = 0.0;
-        _zUp      = 1.0;
-        _xUpStart = 0.0;
-        _yUpStart = 0.0;
-        _zUpStart = 1.0;
+float BNO055IMUSensor::getDebugDotProduct() {
+    if (!_tumbleReferenceSet) {
+        return 1.0;  // No reference set, return 1.0
     }
 
-    debugln("IMU initialization complete");
+    float dotProduct = _xUp * _xUpStart + _yUp * _yUpStart + _zUp * _zUpStart;
+    return constrain(dotProduct, -1.0, 1.0);
 }
 
-void BNO055IMUSensor::restoreCalibrationData() {
-    long bnoID;
-    bool foundCalib = false;
-
-    // Get stored sensor ID from EEPROM using the new address
-    EEPROM.get(EEPROM_BNO_SENSOR_ID_ADDR, bnoID);
-
-    // Get current sensor info
-    sensor_t sensor;
-    AccGyro.getSensor(&sensor);
-
-    Serial.println("------------------------------------");
-    Serial.print("Sensor:       ");
-    Serial.println(sensor.name);
-    Serial.print("Driver Ver:   ");
-    Serial.println(sensor.version);
-    Serial.print("Unique ID:    ");
-    Serial.println(sensor.sensor_id);
-    Serial.print("Max Value:    ");
-    Serial.print(sensor.max_value);
-    Serial.println(" xxx");
-    Serial.print("Min Value:    ");
-    Serial.print(sensor.min_value);
-    Serial.println(" xxx");
-    Serial.print("Resolution:   ");
-    Serial.print(sensor.resolution);
-    Serial.println(" xxx");
-    Serial.println("------------------------------------");
-
-    debug("Current sensor ID: ");
-    debugln(sensor.sensor_id);
-    debug("EEPROM stored ID: ");
-    debugln(bnoID);
-
-    // Check if we have calibration data for this sensor
-    if (bnoID != sensor.sensor_id) {
-        debugln("No calibration data found in EEPROM for this sensor");
-        debugln("Run calibration sketch first to store calibration data");
-    } else {
-        debugln("Found calibration data in EEPROM");
-
-        // Read calibration data from the new address
-        adafruit_bno055_offsets_t calibrationData;
-        EEPROM.get(EEPROM_BNO_CALIBRATION_ADDR, calibrationData);
-
-        // Display what we're loading
-        debugln("Loading calibration offsets:");
-        displaySensorOffsets(calibrationData);
-
-        // Apply calibration data to sensor
-        AccGyro.setSensorOffsets(calibrationData);
-
-        debugln("Calibration data restored successfully");
-        foundCalib = true;
-    }
-
-    // Optional: Display current calibration status
-    delay(100); // Give sensor time to settle
-    displayCalStatus();
+void BNO055IMUSensor::getDebugUpVector(float* x, float* y, float* z) {
+    *x = _xUp;
+    *y = _yUp;
+    *z = _zUp;
 }
 
-void BNO055IMUSensor::displaySensorOffsets(const adafruit_bno055_offsets_t &calibData) {
-    debug("Accel: ");
-    debug(calibData.accel_offset_x);
-    debug(" ");
-    debug(calibData.accel_offset_y);
-    debug(" ");
-    debug(calibData.accel_offset_z);
-    debug(" ");
-
-    debug(" | Gyro: ");
-    debug(calibData.gyro_offset_x);
-    debug(" ");
-    debug(calibData.gyro_offset_y);
-    debug(" ");
-    debug(calibData.gyro_offset_z);
-    debug(" ");
-
-    debug(" | Mag: ");
-    debug(calibData.mag_offset_x);
-    debug(" ");
-    debug(calibData.mag_offset_y);
-    debug(" ");
-    debug(calibData.mag_offset_z);
-    debug(" ");
-
-    debug(" | Radii: A=");
-    debug(calibData.accel_radius);
-    debug(" M=");
-    debugln(calibData.mag_radius);
+void BNO055IMUSensor::getDebugUpStart(float* x, float* y, float* z) {
+    *x = _xUpStart;
+    *y = _yUpStart;
+    *z = _zUpStart;
 }
 
-void BNO055IMUSensor::displayCalStatus(void) {
-    /* Get the four calibration values (0..3) */
-    /* Any sensor data reporting 0 should be ignored, */
-    /* 3 means 'fully calibrated" */
-    uint8_t system, gyro, accel, mag;
-    system = gyro = accel = mag = 0;
-    AccGyro.getCalibration(&system, &gyro, &accel, &mag);
-
-    /* Display the individual values */
-    Serial.print("Calibration Status - Sys:");
-    Serial.print(system, DEC);
-    Serial.print(" G:");
-    Serial.print(gyro, DEC);
-    Serial.print(" A:");
-    Serial.print(accel, DEC);
-    Serial.print(" M:");
-    Serial.print(mag, DEC);
-
-    if (system == 0) {
-        debug(" [!] System not calibrated - data should be ignored");
-    }
-    debugln();
-}
-
-void BNO055IMUSensor::update() {
-    unsigned long   currentMicros = micros();
-    double          deltaTime     = (currentMicros - _prevMicros) * 1e-6;
-    sensors_event_t angVelocityData, linearAccelData, gravityData;
-    _accGyro.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
-    _accGyro.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
-    _accGyro.getEvent(&gravityData, Adafruit_BNO055::VECTOR_GRAVITY);
-    processData(&angVelocityData);
-    processData(&linearAccelData);
-    processData(&gravityData);
-    updateUpVector(deltaTime);
-    _prevMicros = currentMicros;
-}
-
-void BNO055IMUSensor::processData(sensors_event_t *event) {
-    switch (event->type) {
-        case SENSOR_TYPE_LINEAR_ACCELERATION:
-            _ax = event->acceleration.x;
-            _ay = event->acceleration.y;
-            _az = event->acceleration.z;
-
-            // Calculate the magnitude of the linear acceleration
-            _magnitude = sqrt(_ax * _ax + _ay * _ay + _az * _az);
-            // debug("Acc read: ");
-            // debug(_ax);
-            // debug(", ");
-            // debug(_ay);
-            // debug(", ");
-            // debug(_az);
-            // debugln();
-            break;
-
-        case SENSOR_TYPE_GYROSCOPE:
-            _xGyro = event->gyro.x;
-            _yGyro = event->gyro.y;
-            _zGyro = event->gyro.z;
-            // debug("Gyro read: ");
-            // debug(_xGyro, 4);
-            // debug(", ");
-            // debug(_yGyro, 4);
-            // debug(", ");
-            // debug(_zGyro, 4);
-            // debugln();
-            break;
-
-        case SENSOR_TYPE_GRAVITY:
-            _xGravity = event->acceleration.x;
-            _yGravity = event->acceleration.y;
-            _zGravity = event->acceleration.z;
-            // debug("Gravity read: ");
-            // debug(_xGravity, 4);
-            // debug(", ");
-            // debug(_yGravity, 4);
-            // debug(", ");
-            // debug(_zGravity, 4);
-            // debugln();
-            break;
-    }
+void BNO055IMUSensor::printDebugInfo() {
+    Serial.print("UpStart:(");
+    Serial.print(_xUpStart, 4);
+    Serial.print(", ");
+    Serial.print(_yUpStart, 4);
+    Serial.print(", ");
+    Serial.print(_zUpStart, 4);
+    Serial.print(") | Up:(");
+    Serial.print(_xUp, 4);
+    Serial.print(", ");
+    Serial.print(_yUp, 4);
+    Serial.print(", ");
+    Serial.print(_zUp, 4);
+    Serial.print(") | Gyro:(");
+    Serial.print(_gyro.x(), 4);
+    Serial.print(", ");
+    Serial.print(_gyro.y(), 4);
+    Serial.print(", ");
+    Serial.print(_gyro.z(), 4);
+    Serial.print(") | Dot:");
+    Serial.print(getDebugDotProduct(), 4);
+    Serial.print(" | Angle:");
+    Serial.print(getTumbleAngle(), 2);
+    Serial.println("°");
 }
