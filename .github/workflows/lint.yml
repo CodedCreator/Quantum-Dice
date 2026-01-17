@@ -1,0 +1,36 @@
+name: Clang-Tidy Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy python3
+
+      - name: Make setup_deps script executable
+        run: chmod +x scripts/setup_deps.sh
+
+      - name: Install dependencies
+        run: |
+          bash scripts/setup_deps.sh
+
+      - name: Make lint script executable
+        run: chmod +x scripts/lint.sh
+
+      - name: Run clang-tidy
+        run: |
+          bash scripts/lint.sh

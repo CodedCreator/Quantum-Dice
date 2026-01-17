@@ -2,10 +2,10 @@
 #ifndef SCREENSTATEDEFS_H_
 #define SCREENSTATEDEFS_H_
 
-#include "StateMachine.h" // Ensure this is included
-// truth table at the end of this file
+#include "StateMachine.h"  // Ensure this is included
+                           //truth table at the end of this file
 
-extern State stateSelf, stateSister; // use of the StateMachine inputs
+extern State stateSelf, stateSister;  //use of the StateMachine inputs
 
 enum class DiceStates : uint8_t {
     SINGLE,
@@ -44,7 +44,7 @@ enum class MeasuredAxises : uint8_t {
     YAXIS,
     ZAXIS,
     ALL,
-    NA // not applicable
+    NA  //not applicable
 };
 extern MeasuredAxises measureAxisSelf, prevMeasureAxisSelf, measureAxisSister;
 
@@ -85,9 +85,7 @@ enum class ScreenStates : uint8_t {
     QRCODE,
     UT_LOGO
 };
-extern ScreenStates x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState,
-  z0ReqScreenState,
-  z1ReqScreenState; // actual screenstates of x, y and z
+extern ScreenStates x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState, z0ReqScreenState, z1ReqScreenState;  //actual screenstates of x, y and z
 
 enum class BlinkStates : uint8_t {
     OFF,
@@ -95,41 +93,37 @@ enum class BlinkStates : uint8_t {
 };
 extern BlinkStates blinkState;
 
+
 struct TruthTableEntry {
-    State        state;
-    DiceStates   diceState;
-    DiceNumbers  diceNumber;
-    UpSide       upSide;
-    ScreenStates x0ScreenState; // defined screenstate
+    State state;
+    DiceStates diceState;
+    DiceNumbers diceNumber;
+    UpSide upSide;
+    ScreenStates x0ScreenState;  //defined screenstate
     ScreenStates x1ScreenState;
     ScreenStates y0ScreenState;
     ScreenStates y1ScreenState;
     ScreenStates z0ScreenState;
     ScreenStates z1ScreenState;
 };
-
 // Declare the truth table as an external variable
 extern TruthTableEntry truthTable[];
 
 // Function prototypes
-bool findValues(State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide,
-                ScreenStates &x0ScreenState, ScreenStates &x1ScreenState,
-                ScreenStates &y0ScreenState, ScreenStates &y1ScreenState,
-                ScreenStates &z0ScreenState, ScreenStates &z1ScreenState);
+bool findValues(State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState);
 
-// void printValues(ScreenStates x, ScreenStates y, ScreenStates z);
+//void printValues(ScreenStates x, ScreenStates y, ScreenStates z);
 
-// const char *toString(ScreenStates value);
+//const char *toString(ScreenStates value);
 
 void callFunction(ScreenStates result);
 
-void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, ScreenStates y1,
-                           ScreenStates z0, ScreenStates z1);
+void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, ScreenStates y1, ScreenStates z0, ScreenStates z1);
 void refreshScreens();
-DiceNumbers    selectOneToSix();
-DiceNumbers    selectOppositeOneToSix(DiceNumbers diceNumberTop);
-void           printDiceStateName(const char *objectName, DiceStates diceState);
-void           printDiceStateName2(const char *objectName, DiceStates diceState);
-MeasuredAxises getAxis();
+DiceNumbers selectOneToSix();
+DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop);
+void printDiceStateName(const char *objectName, DiceStates diceState);
+void printDiceStateName2(const char *objectName, DiceStates diceState);
+
 
 #endif /* SCREENSTATEDEFS_H_ */
