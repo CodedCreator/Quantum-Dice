@@ -1,4 +1,4 @@
-finclude "Arduino.h"
+#include "Arduino.h"
 #include "defines.h"
 #include "IMUhelpers.h"
 #include "handyHelpers.h"
@@ -292,6 +292,7 @@ DiceNumbers selectOneToSix() {
             return DiceNumbers::SIX;
             break;
     }
+    return DiceNumbers::ONE;
 }
 DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop) {
     debugln("select opposite number");
@@ -315,4 +316,5 @@ DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop) {
             return DiceNumbers::ONE;
             break;
     }
+    return DiceNumbers::ONE;
 }

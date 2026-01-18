@@ -32,6 +32,7 @@ typedef struct _message {
     } data;
 } message;
 
+static int32_t rssi = 0;
 
 //definitions of functions related to states
 const StateMachine::StateFunctions StateMachine::stateFunctions[] = {
@@ -236,7 +237,7 @@ StateMachine::StateMachine()
 
 void StateMachine::begin() {
     // Initialize ESP-NOW with device A MAC from config
-    EspNowSensor<message>::Init(currentConfig.deviceA_mac);
+    EspNowSensor<message>::Init();
 
     // Determine roles based on MAC address
     determineRoles();
@@ -272,8 +273,10 @@ void StateMachine::update() {
     static unsigned long lastUpdateTime = 0;
 
     message data;
+    uint8_t source[6];
+    int32_t current_rssi;
 
-    while (EspNowSensor<message>::Poll(&data)) {
+    while (EspNowSensor<message>::Poll(&data, source, &current_rssi)) {
         switch (data.type) {
             case MESSAGE_TYPE_WATCH_DOG:  // watch dog, send by all dices
                 stateSister = data.data.watchDog.state;
@@ -312,6 +315,14 @@ void StateMachine::update() {
                 entangleStopRcv = true;
                 break;
         }
+
+        for (size_t i = 0; i < 6; i++) {
+            if (source[i] != currentConfig.deviceA_mac[i]) {
+                goto leave;
+            }
+        }
+        rssi = current_rssi;
+        leave:
     }
 
     _imuSensor->update();
@@ -596,13 +607,13 @@ void StateMachine::whileWAITFORTHROW() {
 
         // and dice B1 and B2 respond to that
     } else if (roleSelf == Roles::ROLE_B1) {
-        if (entangleRequestRcvA && EspNowSensor<message>::IsCloseBy()) {
+        if (entangleRequestRcvA && rssi > currentConfig.rssiLimit && rssi < -1) {
             sendEntanglementConfirm(Roles::ROLE_A);
             entangleRequestRcvA = false;
             changeState(Trigger::closeByAB1);
         }
     } else if (roleSelf == Roles::ROLE_B2) {
-        if (entangleRequestRcvA && EspNowSensor<message>::IsCloseBy()) {
+        if (entangleRequestRcvA && rssi > currentConfig.rssiLimit && rssi < -1) {
             sendEntanglementConfirm(Roles::ROLE_A);
             entangleRequestRcvA = false;
             changeState(Trigger::closeByAB2);

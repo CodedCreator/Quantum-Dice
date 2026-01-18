@@ -13,26 +13,30 @@
 #include <sys/_stdint.h>
 #include <WiFi.h>
 
+template<typename T>
+struct temp {
+    T message;
+    uint8_t source[6];
+    int32_t rssi;
+};
+
 template<typename T> class EspNowSensor {
   private:
     static EspNowSensor *instance;
 
   private:
-    void init(uint8_t *rssiCompareAddr);
+    void init();
 
     void addPeer(uint8_t *addr);
 
     void printMacAddress();
     void getMacAddress(uint8_t *addr);
 
-    bool isCloseBy();
-
     bool send(T message, uint8_t *target);
-    bool poll(T *message);
+    bool poll(T *message, uint8_t *source, int32_t *rssi);
 
     void onDataRecv(const esp_now_recv_info_t *mac, const unsigned char *incomingData, int len);
     void onDataSend(const wifi_tx_info_t *tx_info, esp_now_send_status_t status);
-    void promiscuousRxCb(void *buf, wifi_promiscuous_pkt_type_t type);
 
   private:
     static void OnDataRecv(const esp_now_recv_info_t *mac, const unsigned char *incomingData,
@@ -46,17 +50,12 @@ template<typename T> class EspNowSensor {
         instance->onDataSend(tx_info, status);
     }
 
-    static void PromiscuousRxCb(void *buf, wifi_promiscuous_pkt_type_t type) {
-        assert(instance);
-        instance->promiscuousRxCb(buf, type);
-    }
-
   public:
-    static void Init(uint8_t *rssiCompareAddr) {
+    static void Init() {
         // Should only be initialized once
         assert(!instance);
         instance = new EspNowSensor<T>();
-        instance->init(rssiCompareAddr);
+        instance->init();
     }
 
     static void AddPeer(uint8_t *addr) {
@@ -74,26 +73,18 @@ template<typename T> class EspNowSensor {
         instance->getMacAddress(addr);
     }
 
-    static bool IsCloseBy() {
-        assert(instance);
-        return instance->isCloseBy();
-    }
-
     static bool Send(T message, uint8_t *target) {
         assert(instance);
         return instance->send(message, target);
     }
 
-    static bool Poll(T *message) {
+    static bool Poll(T *message, uint8_t *source, int32_t *rssi) {
         assert(instance);
-        return instance->poll(message);
+        return instance->poll(message, source, rssi);
     }
 
   private:
-    Queue<T> _messageQueue;
-
-    uint8_t *_rssiCmpAddr;
-    int      _rssi;
+    Queue<struct temp<T>> _messageQueue;
 };
 
 // ================================================================================
@@ -118,9 +109,7 @@ typedef struct {
 
 template<typename T> EspNowSensor<T> *EspNowSensor<T>::instance = 0;
 
-template<typename T> void EspNowSensor<T>::init(uint8_t *rssiCompareAddr) {
-    _rssiCmpAddr = (uint8_t *)malloc(6 * sizeof(uint8_t));
-    memcpy(_rssiCmpAddr, rssiCompareAddr, 6 * sizeof(uint8_t));
+template<typename T> void EspNowSensor<T>::init() {
 
     // Initialize the Wi-Fi module
     WiFi.mode(WIFI_STA);
@@ -136,10 +125,6 @@ template<typename T> void EspNowSensor<T>::init(uint8_t *rssiCompareAddr) {
     // Register callback functions
     esp_now_register_send_cb(EspNowSensor<T>::OnDataSend);
     esp_now_register_recv_cb(EspNowSensor<T>::OnDataRecv);
-
-    esp_wifi_set_promiscuous(false);
-    esp_wifi_set_promiscuous_rx_cb(EspNowSensor<T>::PromiscuousRxCb);
-    esp_wifi_set_promiscuous(true);
 
     Serial.println("ESP-NOW initialized successfully!");
 
@@ -177,11 +162,6 @@ template<typename T> void EspNowSensor<T>::getMacAddress(uint8_t *addr) {
     WiFi.macAddress(addr);
 }
 
-template<typename T> bool EspNowSensor<T>::isCloseBy() {
-    // Use RSSI limit from configuration instead of hardcoded define
-    return _rssi > currentConfig.rssiLimit && _rssi < -1;
-}
-
 template<typename T> bool EspNowSensor<T>::send(T message, uint8_t *target) {
     T *toSend = (T *)malloc(sizeof(T));
     if (!toSend) {
@@ -194,21 +174,26 @@ template<typename T> bool EspNowSensor<T>::send(T message, uint8_t *target) {
     return result == ESP_OK;
 }
 
-template<typename T> bool EspNowSensor<T>::poll(T *message) {
+template<typename T> bool EspNowSensor<T>::poll(T *message, uint8_t *source, int32_t *rssi) {
     if (_messageQueue.isEmpty()) {
         return false;
     }
 
-    *message = _messageQueue.pop();
+    struct temp<T> _temp = _messageQueue.pop();
+    memcpy(message, &_temp.message, sizeof(T));
+    memcpy(source, _temp.source, 6);
+    *rssi = _temp.rssi;
     return true;
 }
 
 template<typename T>
 void EspNowSensor<T>::onDataRecv(const esp_now_recv_info_t *mac, const unsigned char *incomingData,
                                  int len) {
-    T message;
-    memcpy(&message, incomingData, sizeof(T));
-    _messageQueue.push(message);
+    struct temp<T> _temp;
+    memcpy(&_temp.message, incomingData, sizeof(T));
+    memcpy(_temp.source, mac->src_addr, 6);
+    _temp.rssi = mac->rx_ctrl->rssi;
+    _messageQueue.push(_temp);
 }
 
 template<typename T>
@@ -227,6 +212,7 @@ void EspNowSensor<T>::onDataSend(const wifi_tx_info_t *tx_info, esp_now_send_sta
     // parameter)
 }
 
+/*
 template<typename T>
 void EspNowSensor<T>::promiscuousRxCb(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_MGMT) {
@@ -243,6 +229,6 @@ void EspNowSensor<T>::promiscuousRxCb(void *buf, wifi_promiscuous_pkt_type_t typ
 
         _rssi = ppkt->rx_ctrl.rssi;
     }
-}
+}*/
 
 #endif /* ESPNOWSENSOR_H_ */
