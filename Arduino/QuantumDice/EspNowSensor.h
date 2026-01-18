@@ -126,6 +126,10 @@ template<typename T> void EspNowSensor<T>::init() {
     esp_now_register_send_cb(EspNowSensor<T>::OnDataSend);
     esp_now_register_recv_cb(EspNowSensor<T>::OnDataRecv);
 
+    uint8_t broadcast[6];
+    memset(broadcast, 0xFF, 6);
+    this->addPeer(broadcast);
+
     Serial.println("ESP-NOW initialized successfully!");
 
     printMacAddress();
@@ -204,31 +208,6 @@ void EspNowSensor<T>::onDataSend(const wifi_tx_info_t *tx_info, esp_now_send_sta
         debugln(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
         prevStatus = status;
     }
-
-    // Optional: You can now access additional information if needed:
-    // tx_info->des_addr - destination MAC address
-    // tx_info->src_addr - source MAC address
-    // tx_info->tx_status - transmission status (alternative to 'status'
-    // parameter)
 }
-
-/*
-template<typename T>
-void EspNowSensor<T>::promiscuousRxCb(void *buf, wifi_promiscuous_pkt_type_t type) {
-    if (type != WIFI_PKT_MGMT) {
-        return;
-    }
-
-    const wifi_promiscuous_pkt_t   *ppkt = (wifi_promiscuous_pkt_t *)buf;
-    const wifi_ieee80211_packet_t  *ipkt = (wifi_ieee80211_packet_t *)ppkt->payload;
-    const wifi_ieee80211_mac_hdr_t *hdr  = &ipkt->hdr;
-    for (size_t i = 0; i < 6; i++) {
-        if (hdr->addr2[i] != _rssiCmpAddr[i]) {
-            return;
-        }
-
-        _rssi = ppkt->rx_ctrl.rssi;
-    }
-}*/
 
 #endif /* ESPNOWSENSOR_H_ */

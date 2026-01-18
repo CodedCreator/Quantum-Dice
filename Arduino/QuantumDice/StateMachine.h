@@ -103,14 +103,16 @@ class StateMachine {
     private:
         void determineRoles();
         void sendWatchDog();
-        void sendMeasurements(Roles targetRole, State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, MeasuredAxises measureAxis);
-        void sendEntangleRequest(Roles targetRole);
-        void sendEntanglementConfirm(Roles targetRole);
-        void sendStopEntanglement(Roles targetRole);
+        void sendMeasurements(uint8_t *target, State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, MeasuredAxises measureAxis);
+        void sendEntangleRequest(uint8_t *target);
+        void sendEntanglementConfirm(uint8_t *target);
+        void sendStopEntanglement(uint8_t *target);
 
     private:
         IMUSensor *_imuSensor;
         State currentState;
+        uint8_t current_peer[6];
+        uint8_t next_peer[6];
 
         Roles roleSelf, roleA, roleB1, roleB2, roleBrother, roleSister;
 
