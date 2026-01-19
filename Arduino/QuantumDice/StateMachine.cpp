@@ -252,8 +252,8 @@ void StateMachine::begin() {
     assert(roleSelf != Roles::NONE && "Role cannot be NONE");
 
     // Register peers (both sister and brother devices)
-    EspNowSensor<message>::AddPeer(getMacForRole(roleSister));
-    EspNowSensor<message>::AddPeer(getMacForRole(roleBrother));
+    //EspNowSensor<message>::AddPeer(getMacForRole(roleSister));
+    //EspNowSensor<message>::AddPeer(getMacForRole(roleBrother));
 
     Serial.println("ESP-NOW initialized successfully!");
 
@@ -568,10 +568,12 @@ void StateMachine::whileWAITFORTHROW() {
         changeState(Trigger::entangleStopReceived);
     } else if (entangleConfirmRcvB1) {
         memcpy(this->next_peer, last_source, 6);
+        EspNowSensor<message>::AddPeer(this->next_peer);
         entangleConfirmRcvB1 = false;
         changeState(Trigger::closeByAB1);
     } else if (last_rssi > currentConfig.rssiLimit && last_rssi < -1 && memcmp(last_source, this->current_peer, 6) != 0) {
         memcpy(this->next_peer, last_source, 6);
+        EspNowSensor<message>::AddPeer(this->next_peer);
         sendEntanglementConfirm(last_source);
         last_rssi = 0;
         changeState(Trigger::closeByAB1);
