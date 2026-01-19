@@ -13,7 +13,7 @@ BNO055IMUSensor::BNO055IMUSensor() : _bno(55) {
   // Initialize default thresholds
   _motionThreshold = 0.5;        // m/s²
   _stableThreshold = 0.15;       // m/s²
-  _stableCountRequired = 5;      // samples
+  _stableCountRequired = 200;      // samples
   _flatGravityMin = 9.0;         // m/s²
   _flatGravityMax = 10.5;        // m/s²
   _flatOtherAxisMax = 2.0;       // m/s²
