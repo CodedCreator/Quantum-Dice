@@ -11,6 +11,7 @@
 #include "defines.h"
 #include "Queue.h"
 #include "handyHelpers.h"  // Include for currentConfig access
+#include "DiceConfigManager.h"
 
 template <typename T>
 class EspNowSensor
