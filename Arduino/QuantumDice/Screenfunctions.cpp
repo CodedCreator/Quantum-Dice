@@ -8,7 +8,6 @@
 #include "ImageLibrary/ImageLibrary.h"
 #include "IMUhelpers.h"
 #include "ScreenStateDefs.h"
-#include "Version.h"
 
 // Global TFT object - will be initialized dynamically
 Adafruit_GC9A01A tft(-1, -1, -1); // Temporary pins, will be reinitialized
