@@ -2,12 +2,12 @@
 #define STATEMACHINE_H
 
 #include <Arduino.h>
-#include "IMUhelpers.h"
-#include "Globals.h"
+#include <cstdint>
 
-//#include "EntangStateMachine.h"
+#include "IMUhelpers.h"
 
 #define FSM_UPDATE_INTERVAL 0  // Update interval in milliseconds
+#define MAC_ADDRESS_LENGTH 6
 
 enum class DiceStates : uint8_t;
 enum class DiceNumbers : uint8_t;
@@ -49,13 +49,6 @@ enum class Trigger {
     timed,
     closeByAB2,
     entangleStopReceived
-};
-
-enum class Roles : uint8_t {
-    ROLE_A,
-    ROLE_B1,
-    ROLE_B2,
-    NONE
 };
 
 struct StateTransition {
@@ -101,20 +94,16 @@ class StateMachine {
         void whileINITSINGLE_AFTER_ENT();
 
     private:
-        void determineRoles();
-        void sendWatchDog();
-        void sendMeasurements(uint8_t *target, State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, MeasuredAxises measureAxis);
-        void sendEntangleRequest(uint8_t *target);
-        void sendEntanglementConfirm(uint8_t *target);
-        void sendStopEntanglement(uint8_t *target);
+        static void sendWatchDog();
+        static void sendMeasurements(uint8_t *target, State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, MeasuredAxises measureAxis);
+        static void sendEntangleRequest(uint8_t *target);
+        static void sendEntanglementConfirm(uint8_t *target);
+        static void sendStopEntanglement(uint8_t *target);
 
-    private:
         IMUSensor *_imuSensor;
         State currentState;
-        uint8_t current_peer[6];
-        uint8_t next_peer[6];
-
-        Roles roleSelf, roleA, roleB1, roleB2, roleBrother, roleSister;
+        uint8_t current_peer[MAC_ADDRESS_LENGTH];
+        uint8_t next_peer[MAC_ADDRESS_LENGTH];
 
         unsigned long stateEntryTime;
 
