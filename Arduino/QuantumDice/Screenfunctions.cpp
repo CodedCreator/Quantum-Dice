@@ -33,16 +33,16 @@ void selectScreens(uint8_t binaryCode) {
 
 void initDisplays() {
   Serial.println("Initializing displays...");
-  
+
   // Initialize CS pins for all screens
   for (int i = 0; i < 6; i++) {
     pinMode(hwPins.screen_cs[i], OUTPUT);
     digitalWrite(hwPins.screen_cs[i], HIGH);  // Start with all deactivated
   }
-  
+
   // Reinitialize TFT with correct pins from configuration
   tft = Adafruit_GC9A01A(hwPins.tft_cs, hwPins.tft_dc, hwPins.tft_rst);
-  
+
   selectScreens(ALL);  // Select all screens
   delay(500);
   tft.begin();  // Initialize the display
@@ -57,7 +57,7 @@ void initDisplays() {
 
   selectScreens(NO_ONE);  // Deactivate all screens
   delay(100);
-  
+
   Serial.println("Displays initialized successfully!");
 }
 
@@ -441,4 +441,19 @@ void welcomeInfo(uint8_t screens) {
     strcat(displayText2, " #B");
   }
   drawStringCentered(tft, displayText2, 104);
+}
+
+void showConfigMode(uint8_t screens) {
+  selectScreens(screens);
+  // Clear the screen
+  tft.fillScreen(GC9A01A_BLACK);
+
+  // Set text color
+  tft.setTextColor(GC9A01A_RED);
+
+  // First line configuration
+  tft.setFont(&FreeSansBold18pt7b);
+  tft.setTextSize(1);
+
+  drawStringCentered(tft, "Setup Mode", tft.height() / 2 + 9);
 }

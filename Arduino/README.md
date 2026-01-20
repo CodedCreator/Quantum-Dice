@@ -2,6 +2,8 @@
 
 **Welcome!** This guide will walk you through setting up your Quantum Dice step-by-step. Don't worry if you're not technical – we've designed this guide to be easy to follow. Just take it one step at a time, and you'll have your Quantum Dice up and running in no time!
 
+This is a comprehensive guide, starting from a fresh, never used before ESP32 board. If you get your ProcessorBoard from the University of Twente, the configuration is already done and a configuration file is present. For firmware updates or configuration file update you can directly jump to [Updating Your Dice Later](#updating-your-dice-later).
+
 ---
 
 ## 📑 Table of Contents
@@ -102,7 +104,7 @@ Here's what we'll do in plain English:
 2. **Look for the latest release** at the top of the page (it will have a version number like v1.3.0)
 
 3. **Download these two files:**
-   - `Blink_to_partitions.bin` – This prepares your dice (one-time setup)
+   - `QunatumDiceInit.bin` – This prepares your dice (one-time setup)
    - `QuantumDice.vX.X.X.bin` – This is the main program (X.X.X will be version numbers)
 
 4. **Save them** to a location you'll remember (like your Downloads folder or Desktop)
@@ -237,7 +239,7 @@ Here's what we'll do in plain English:
 
 > 📌 **Note:** This section (Steps 7-8) is only needed for **brand new dice**. If you're just updating firmware or configuration, you can skip to [Step 9](#step-9-upload-your-configuration-file-to-dice-b).
 
-### Step 7: Flash the Partition Tool to Dice B
+### Step 7: Flash the quantumDiceInit Tool to Dice B
 
 **What you're doing:** Preparing Dice B's internal storage so it can save files.
 
@@ -249,7 +251,7 @@ Here's what we'll do in plain English:
 
 3. **Click "Firmware binary (.bin)"** button
 
-4. **Select the file** `Blink_to_partitions.bin` (from Step 1)
+4. **Select the file** `QuantumDiceInit.bin` (from Step 1)
 
 5. **Check the box** next to "Erase entire flash before writing"
 
@@ -264,23 +266,74 @@ Here's what we'll do in plain English:
 
 9. **Success!** You should see a message saying "Flash complete"
 
-✅ **The partition tool is installed on Dice B!**
+✅ **The initialisation tool is installed on Dice B!**
 
 ---
 
-### Step 8: Verify the Partitions
+### Step 8: Run the QuantumDiceInit tool
 
-**What you're doing:** Checking that the storage was set up correctly.
+**What you're doing:** Creating the partition to store your config.txt file.
 
-1. **In ESPConnect, click "Partitions"** in the left sidebar
+1. **Reboot the QuantumDice**
+Press the reset button on the processorBoard or disconnect/connect the USB cable to reboot the ESP32. This will run the Init sketch. Reconnect again.
 
-2. **Look at the partition list** – you should see several partitions including one called **`littleFS`**
-![alt text](../images/Partition_layout.png)
-   > 💡 **What you're looking for:** A partition named `littleFS` – this is where your configuration file will be stored.
+If you see the `LittleFS Tools` on the left side, continue with the next step.
+![alt text](<../images/LittleFS confirm.png>).  
 
-3. **If you see `littleFS`** – perfect! Move to the next step.
+1. **Optional: check Serial monitor to confirm LittleFs status**
 
-4. **If you DON'T see it** – something went wrong:
+To check the status of the LittleFS click `Serial Monitor` button on the left side. Click the `Start` button to start the monitor.
+![alt text](<../images/LittleFS confirm.png>)
+
+Typical output:
+
+```
+
+�� �c� h(ܓ80Q�ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40378f51
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x116c
+load:0x403c8700,len:0xc2c
+load:0x403cb700,len:0x3108
+entry 0x403c88b8
+
+╔════════════════════════════════════════╗
+║   LittleFS Config File Test Sketch    ║
+╚════════════════════════════════════════╝
+
+Step 1: Mounting LittleFS...
+✓ LittleFS mounted successfully!
+Total space: 4194304 bytes
+Used space:  8192 bytes
+Free space:  4186112 bytes
+
+Step 2: Searching for *_config.txt files...
+
+--- Files in LittleFS ---
+-------------------------
+
+Step 3: Config file check results:
+
+⚠️  NO CONFIG FILES FOUND
+Status: No *_config.txt files detected
+Action: Upload a config file named YOURNAME_config.txt
+
+╔════════════════════════════════════════╗
+║          Test Complete                 ║
+╚════════════════════════════════════════╝
+
+```
+
+It will indicate if:
+
+- no config file is present (most likely)
+- a config file is found
+- multiple config files found. Only one file may exist.
+
+1. **If you DON'T see it** – something went wrong:
    - Try Step 7 again
    - Make sure Flash Offset was set to `0x0`
    - See [Troubleshooting](#troubleshooting) if you continue having issues

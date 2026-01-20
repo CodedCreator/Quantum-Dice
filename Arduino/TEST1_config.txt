@@ -17,7 +17,7 @@ diceId=TEST1
 # Format: AA:BB:CC:DD:EE:FF (hexadecimal)
 # Get MAC addresses from your ESP32 devices
 # if B2 is not used, leave as is
-deviceA_mac=d0:cf:13:36:17:dc
+deviceA_mac=d0:cf:13:36:17:f0
 deviceB1_mac=AA:BB:CC:DD:EE:02
 deviceB2_mac=DC:DA:0C:21:02:44
 

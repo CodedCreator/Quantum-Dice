@@ -115,4 +115,24 @@ bool loadGlobalConfig(bool verbose = false);
 void printGlobalConfig();
 bool saveGlobalConfig();
 
+// Auto-initialization function (formats LittleFS and creates default config if needed)
+bool ensureLittleFSAndConfig(bool verbose = false);
+
+// Validation functions
+bool isValidMacAddress(const uint8_t* mac);
+bool hasValidMacAddresses();
+bool isInSetupMode();
+
+// Internal helper (exposed for advanced use)
+bool createDefaultConfigFile(const char* filename, bool verbose = false);
+
+// ============================================================================
+// SAFE MODE BOOT FUNCTIONS
+// ============================================================================
+// Set minimal hardware defaults (isNano, isSMD only)
+void setHardwareDefaults();
+
+// Enter safe mode and wait for config upload
+void enterSetupMode();
+
 #endif // DICE_CONFIG_MANAGER_H

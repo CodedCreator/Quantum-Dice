@@ -3,6 +3,7 @@
  */
 
 #include "DiceConfigManager.h"
+#include <WiFi.h>
 
 // Constructor
 DiceConfigManager::DiceConfigManager() {
@@ -641,5 +642,233 @@ bool saveGlobalConfig() {
   
   Serial.println("Global config saved successfully!");
   return true;
+}
+
+// ============================================================================
+// AUTO-INITIALIZATION AND VALIDATION FUNCTIONS
+// ============================================================================
+
+bool ensureLittleFSAndConfig(bool verbose) {
+  // Step 1: Ensure LittleFS is mounted (format if needed)
+  if (verbose) {
+    Serial.println("Mounting LittleFS...");
+  }
+  
+  if (!LittleFS.begin(true)) {  // true = format if mount fails
+    Serial.println("Failed to mount/format LittleFS!");
+    return false;
+  }
+  
+  if (verbose) {
+    Serial.println("LittleFS mounted successfully");
+    Serial.printf("Total: %u bytes, Used: %u bytes\n", 
+                  LittleFS.totalBytes(), LittleFS.usedBytes());
+  }
+  
+  // Step 2: Check if any config file exists
+  bool configExists = false;
+  String foundConfigPath = "";
+  
+  File root = LittleFS.open("/");
+  if (root && root.isDirectory()) {
+    File file = root.openNextFile();
+    while (file) {
+      String filename = String(file.name());
+      if (filename.endsWith("_config.txt") || filename == "/config.txt") {
+        configExists = true;
+        foundConfigPath = filename;
+        if (verbose) {
+          Serial.printf("Found existing config file: %s\n", filename.c_str());
+        }
+        file.close();
+        break;
+      }
+      file.close();
+      file = root.openNextFile();
+    }
+    root.close();
+  }
+  
+  // Step 3: If no config exists, create a default one
+  if (!configExists) {
+    if (verbose) {
+      Serial.println("No config file found, creating default config.txt...");
+    }
+    
+    if (!createDefaultConfigFile("/config.txt", verbose)) {
+      Serial.println("Failed to create default config!");
+      return false;
+    }
+  }
+  
+  // Step 4: Load the config into currentConfig
+  return loadGlobalConfig(verbose);
+}
+
+bool createDefaultConfigFile(const char* filename, bool verbose) {
+  File file = LittleFS.open(filename, "w");
+  if (!file) {
+    if (verbose) {
+      Serial.printf("Failed to create file: %s\n", filename);
+    }
+    return false;
+  }
+  
+  // Write default configuration with helpful comments
+  file.println("# ==========================================");
+  file.println("# QUANTUM DICE DEFAULT CONFIGURATION");
+  file.println("# ⚠️  IMPORTANT: Upload your custom config!");
+  file.println("# ==========================================");
+  file.println();
+  file.println("# Device Identification - CHANGE THIS!");
+  file.println("diceId=DEFAULT");
+  file.println();
+  file.println("# ⚠️  CRITICAL: Update with your actual MAC addresses!");
+  file.println("# Device CANNOT operate without valid MAC addresses");
+  file.println("# These are required for ESP-NOW entanglement");
+  file.println("# Get MACs from serial output or device label");
+  file.println("deviceA_mac=00:00:00:00:00:00");
+  file.println("deviceB1_mac=00:00:00:00:00:00");
+  file.println("deviceB2_mac=00:00:00:00:00:00");
+  file.println();
+  file.println("# Display Colors (RGB565) - defaults work fine");
+  file.println("x_background=63488");
+  file.println("y_background=2016");
+  file.println("z_background=31");
+  file.println("entang_ab1_color=65535");
+  file.println("entang_ab2_color=0");
+  file.println();
+  file.println("# RSSI Settings");
+  file.println("rssiLimit=-70");
+  file.println();
+  file.println("# Hardware Configuration");
+  file.println("isSMD=false");
+  file.println("isNano=false");
+  file.println("alwaysSeven=false");
+  file.println();
+  file.println("# Operational Parameters");
+  file.println("randomSwitchPoint=50");
+  file.println("tumbleConstant=2.5");
+  file.println("deepSleepTimeout=300000");
+  file.println();
+  file.println("# Checksum (auto-calculated on save)");
+  file.println("checksum=0");
+  
+  file.close();
+  
+  if (verbose) {
+    Serial.printf("Created default config file: %s\n", filename);
+  }
+  
+  return true;
+}
+
+bool isValidMacAddress(const uint8_t* mac) {
+  // Check if MAC is not all zeros
+  for (int i = 0; i < 6; i++) {
+    if (mac[i] != 0x00) {
+      return true;  // At least one non-zero byte
+    }
+  }
+  return false;  // All zeros = invalid
+}
+
+bool hasValidMacAddresses() {
+  return isValidMacAddress(currentConfig.deviceA_mac) &&
+         isValidMacAddress(currentConfig.deviceB1_mac) &&
+         isValidMacAddress(currentConfig.deviceB2_mac);
+}
+
+bool isInSetupMode() {
+  // Check if using default ID
+  if (strcmp(currentConfig.diceId, "DEFAULT") == 0) {
+    return true;
+  }
+  
+  // Check if MAC addresses are valid
+  if (!hasValidMacAddresses()) {
+    return true;
+  }
+  
+  return false;
+}
+
+// ============================================================================
+// SAFE MODE BOOT FUNCTIONS
+// ============================================================================
+
+void setHardwareDefaults() {
+  currentConfig.isNano = false;  // DEVKIT
+  currentConfig.isSMD = true;    // SMD mounting
+}
+
+void enterSetupMode() {
+  Serial.println("\n╔════════════════════════════════════════╗");
+  Serial.println("║     SETUP MODE - CONFIG REQUIRED      ║");
+  Serial.println("╚════════════════════════════════════════╝");
+  Serial.println();
+  Serial.println("No valid configuration found!");
+  Serial.println("Displays should show: CONFIG MODE");
+  Serial.println();
+  
+  // Get and display MAC address
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  Serial.println("═══════════════════════════════════════");
+  Serial.println("DEVICE INFORMATION:");
+  Serial.println("═══════════════════════════════════════");
+  Serial.printf("  MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  Serial.printf("  Hardware: %s\n", currentConfig.isNano ? "NANO" : "DEVKIT");
+  Serial.printf("  Mounting: %s\n", currentConfig.isSMD ? "SMD" : "HDR");
+  Serial.println();
+  
+  Serial.println("═══════════════════════════════════════");
+  Serial.println("NEXT STEPS:");
+  Serial.println("═══════════════════════════════════════");
+  Serial.println();
+  Serial.println("1. STOP the Serial Monitor");
+  Serial.println("   └─> Click STOP button");
+  Serial.println("   └─> Returns device to stub mode");
+  Serial.println();
+  Serial.println("2. Open 'LittleFS Tools'");
+  Serial.println("   └─> Click in left sidebar");
+  Serial.println("   └─> Filesystem is ready");
+  Serial.println();
+  Serial.println("3. Upload your config file:");
+  Serial.println("   └─> Name: YOURNAME_config.txt");
+  Serial.println("   └─> Must contain:");
+  Serial.println("       • diceId=YOURNAME");
+  Serial.printf("       • deviceA_mac=%02X:%02X:%02X:%02X:%02X:%02X (this device or peer)\n",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  Serial.println("       • deviceB1_mac=XX:XX:XX:XX:XX:XX");
+  Serial.println("       • deviceB2_mac=XX:XX:XX:XX:XX:XX");
+  Serial.println("       • Other settings (see template)");
+  Serial.println();
+  Serial.println("4. Restart device:");
+  Serial.println("   Option A: START Serial Monitor again");
+  Serial.println("   Option B: DISCONNECT and reconnect");
+  Serial.println();
+  Serial.println("═══════════════════════════════════════");
+  Serial.println("Waiting for config upload...");
+  Serial.println("═══════════════════════════════════════");
+  
+  // Idle loop with periodic reminders
+  unsigned long lastReminder = 0;
+  int reminderCount = 0;
+  
+  while(true) {
+    // Print reminder every 30 seconds
+    if (millis() - lastReminder > 30000) {
+      reminderCount++;
+      Serial.println();
+      Serial.printf("⏳ Still waiting... (%d minutes)\n", reminderCount / 2);
+      Serial.println("   Remember to STOP Serial Monitor before uploading!");
+      
+      lastReminder = millis();
+    }
+    
+    delay(100);
+  }
 }
 

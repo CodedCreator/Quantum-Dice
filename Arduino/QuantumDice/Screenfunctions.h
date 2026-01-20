@@ -68,5 +68,6 @@ void printChar(uint8_t screens, char* letters, uint16_t fontcolor, uint16_t bckc
 void voltageIndicator(uint8_t screens);
 void welcomeInfo(uint8_t screens);
 void drawStringCentered(Adafruit_GFX& gfx, const String& text, int16_t y);
+void showConfigMode(uint8_t screens);
 
 #endif /* SCREENFUNCTIONS_H_ */
