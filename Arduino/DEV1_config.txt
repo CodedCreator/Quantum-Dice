@@ -9,7 +9,7 @@
 # DEVICE IDENTIFICATION (UNIQUE)
 # ==========================================
 # Unique identifier for this dice (max 5 characters)
-diceId=TEST1
+diceId=DEV1
 
 # ==========================================
 # DEVICE MAC ADDRESSES (IMPORTANT)
@@ -17,11 +17,11 @@ diceId=TEST1
 # Format: AA:BB:CC:DD:EE:FF (hexadecimal)
 # Get MAC addresses from your ESP32 devices
 # if B2 is not used, leave as is
-deviceA_mac=d0:cf:13:33:58:70
-deviceB1_mac=0:cf:13:36:40:94
+deviceA_mac=d0:cf:13:33:58:5c
+deviceB1_mac=d0:cf:13:36:40:88
 deviceB2_mac=DC:DA:0C:21:02:44
 
-# Belows setting is for Advanced users. Default values are ok to use
+# Below's setting is for Advanced users. Default values are ok to use
 
 # ==========================================
 # DISPLAY COLORS

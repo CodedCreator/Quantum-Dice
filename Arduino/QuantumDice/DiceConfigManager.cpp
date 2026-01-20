@@ -109,6 +109,13 @@ bool DiceConfigManager::load(const char* filename) {
     char* value = separator + 1;
     
     trim(key);
+    
+    // Strip inline comments from value (everything after #)
+    char* comment = strchr(value, '#');
+    if (comment) {
+      *comment = '\0';  // Terminate string at comment
+    }
+    
     trim(value);
     
     // Parse based on key
@@ -871,4 +878,3 @@ void enterSetupMode() {
     delay(100);
   }
 }
-

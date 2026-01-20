@@ -44,6 +44,8 @@ void setup() {
   Serial.println(currentConfig.diceId);  // Use diceId from config
   Serial.print("Board type: ");
   Serial.println(currentConfig.isNano ? "NANO" : "DEVKIT");  // Use config instead of defines
+  Serial.print("Connectie type isSMD: ");
+  Serial.println(currentConfig.isSMD ? "SMD" : "HDR");  // Use config instead of defines
 
   // Initialize displays - now uses hwPins from loaded configuration
   initDisplays();
