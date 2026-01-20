@@ -569,7 +569,6 @@ void StateMachine::whileWAITFORTHROW() {
     entangleStopRcv = false;
     changeState(Trigger::entangleStopReceived);
   }
-  /*
   //diceA initiates entanglement request, only to dice not entangled to
   if (roleSelf == Roles::ROLE_A) {
     if (diceStateSelf != DiceStates::ENTANGLED_AB1) {  //SINGLE or ENTANGLED_AB2
@@ -615,7 +614,7 @@ void StateMachine::whileWAITFORTHROW() {
   if ((diceStateSelf == DiceStates::ENTANGLED_AB1 || diceStateSelf == DiceStates::ENTANGLED_AB2) && (millis() - stateEntryTime > MAXENTANGLEDWAITTIME)) {  //return to initSingle state
     changeState(Trigger::timed);
   }
-
+  /*
   //when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
   if (measurementReceived) {
     measurementReceived = false;
@@ -646,6 +645,7 @@ void StateMachine::whileTHROWING() {
     debugln("stable and on table triggered");
     changeState(Trigger::nonMoving);
   }
+  /*
   //when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
   if (measurementReceived) {
     measurementReceived = false;
@@ -657,6 +657,7 @@ void StateMachine::whileTHROWING() {
     }
     refreshScreens();  //update screens ackordingly
   }
+  */
 };
 
 void StateMachine::enterINITMEASURED() {

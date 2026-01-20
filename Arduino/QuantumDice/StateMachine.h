@@ -19,7 +19,7 @@ class StateMachine;  // Forward declaration
 #define IDLETIME 3000                //5000 ms-en
 #define SHOWNEWSTATETIME 1000        //ms-en to show when new state is initated
 #define MAXENTANGLEDWAITTIME 120000  //ms-en wait for throw in entangled wait, befor return to intitSingle state
-#define STABTIME 800                 //ms-en to stabilize after measurement
+#define STABTIME 200                 //ms-en to stabilize after measurement
 //#define WAITTOTHROW 1000            //minumum time it stays in wait to trow
 
 enum class State {
