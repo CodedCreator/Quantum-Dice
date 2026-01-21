@@ -6,8 +6,8 @@
 #define DEBUG 1
 #if DEBUG == 1
 
-#define debug(x) Serial.print("[D] "); Serial.print(x)
-#define debugln(x) Serial.print("[DEBUG]\t"); Serial.print(x); Serial.println()
+#define debug(...) Serial.print("[D] "); Serial.print(__VA_ARGS__)
+#define debugln(...) Serial.print("[DEBUG]\t"); Serial.print(__VA_ARGS__); Serial.println()
 #define debugf(fmt, ...) \
     Serial.print("[D] "); \
     Serial.printf(fmt, __VA_ARGS__)
@@ -15,22 +15,23 @@
 #else
 #define debug(x)
 #define debugln(x)
+#define debugf(fmt, ...)
 #endif
 
-#define info(x) Serial.print("[L]"); Serial.print(x)
-#define infoln(x) Serial.print("[LOG]\t"); Serial.print(x); Serial.println()
+#define info(...) Serial.print("[L]"); Serial.print(__VA_ARGS__)
+#define infoln(...) Serial.print("[LOG]\t"); Serial.print(__VA_ARGS__); Serial.println()
 #define infof(fmt, ...) \
     Serial.print("[L] "); \
     Serial.printf(fmt, __VA_ARGS__)
 
-#define warn(x) Serial.print("[W] "); Serial.print(x)
-#define warnln(x) Serial.print("[WARN]\t"); Serial.print(x); Serial.println()
+#define warn(...) Serial.print("[W] "); Serial.print(__VA_ARGS__)
+#define warnln(...) Serial.print("[WARN]\t"); Serial.print(__VA_ARGS__); Serial.println()
 #define warnf(fmt, ...) \
     Serial.print("[W] "); \
     Serial.printf(fmt, __VA_ARGS__)
 
-#define error(x) Serial.print("[E] "); Serial.print(x)
-#define errorln(x) Serial.print("[ERROR]\t"); Serial.print(x); Serial.println()
+#define error(...) Serial.print("[E] "); Serial.print(__VA_ARGS__)
+#define errorln(...) Serial.print("[ERROR]\t"); Serial.print(__VA_ARGS__); Serial.println()
 #define errorf(fmt, ...) \
     Serial.print("[E] "); \
     Serial.printf(fmt, __VA_ARGS__)

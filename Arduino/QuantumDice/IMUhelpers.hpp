@@ -36,7 +36,7 @@ if (_imuSensor->moving()) {
 // ORIENTATION ENUMERATION
 // ============================================
 
-enum IMU_Orientation
+enum IMU_Orientation: uint8_t
 {
     ORIENTATION_UNKNOWN,
     ORIENTATION_Z_UP,   // Normal vertical position
@@ -55,7 +55,7 @@ enum IMU_Orientation
 class IMUSensor
 {
     public:
-        virtual ~IMUSensor() {}
+        virtual ~IMUSensor() = default;
 
         // ============================================
         // CORE SENSOR INTERFACE
@@ -64,7 +64,7 @@ class IMUSensor
         // Initialize sensor
         // Returns true if successful, false if sensor not detected
         // verbose: Set to true to print initialization progress to Serial
-        virtual bool init(bool verbose = false) = 0;
+        virtual auto init(bool verbose = false) -> bool = 0;
 
         // Must be called regularly to update sensor state
         virtual void update() = 0;
@@ -74,23 +74,23 @@ class IMUSensor
         // ============================================
 
         // Check if sensor is currently moving
-        virtual bool moving() = 0;
+        virtual auto moving() -> bool = 0;
 
         // Check if sensor is stable (not moving)
-        virtual bool stable() = 0;
+        virtual auto stable() -> bool = 0;
 
         // ============================================
         // ORIENTATION DETECTION
         // ============================================
 
         // Check if sensor is flat on one of its faces (on table)
-        virtual bool on_table() = 0;
+        virtual auto on_table() -> bool = 0;
 
         // Get current orientation
-        virtual IMU_Orientation orientation() = 0;
+        virtual auto orientation() -> IMU_Orientation = 0;
 
         // Get orientation as human-readable string
-        virtual String getOrientationString() = 0;
+        virtual auto getOrientationString() -> String = 0;
 
         // ============================================
         // GYROSCOPE
@@ -99,24 +99,24 @@ class IMUSensor
         // Get gyroscope readings in deg/s (as output by BNO055)
         // NOTE: These return raw sensor values in degrees per second
         // Conversion to rad/s happens internally in updateUpVector()
-        virtual float gyroX() = 0;
-        virtual float gyroY() = 0;
-        virtual float gyroZ() = 0;
+        virtual auto gyroX() -> float = 0;
+        virtual auto gyroY() -> float = 0;
+        virtual auto gyroZ() -> float = 0;
 
         // ============================================
         // ACCELEROMETER
         // ============================================
 
         // Get accelerometer readings in m/s²
-        virtual float accelX() = 0;
-        virtual float accelY() = 0;
-        virtual float accelZ() = 0;
+        virtual auto accelX() -> float = 0;
+        virtual auto accelY() -> float = 0;
+        virtual auto accelZ() -> float = 0;
 
         // Get total acceleration magnitude
-        virtual float getAccelMagnitude() = 0;
+        virtual auto getAccelMagnitude() -> float = 0;
 
         // Get acceleration change since last update
-        virtual float getAccelChange() = 0;
+        virtual auto getAccelChange() -> float = 0;
 
         // ============================================
         // CALIBRATION
@@ -126,7 +126,7 @@ class IMUSensor
         virtual void getCalibration(uint8_t *system, uint8_t *gyro, uint8_t *accel, uint8_t *mag) = 0;
 
         // Check if sensor is calibrated
-        virtual bool isCalibrated() = 0;
+        virtual auto isCalibrated() -> bool = 0;
 
         // ============================================
         // TUMBLE DETECTION
@@ -141,11 +141,11 @@ class IMUSensor
         // Uses rotation matrices to track orientation change
         // Insensitive to rotation around the vertical axis (spinning on table)
         // Only detects actual rolling motion
-        virtual bool tumbled() = 0;
+        virtual auto tumbled() -> bool = 0;
 
         // Get the rotation angle in degrees since reference was set
         // Calculated from dot product between current and initial up vectors
-        virtual float getTumbleAngle() = 0;
+        virtual auto getTumbleAngle() -> float = 0;
 
         // Set tumble detection threshold (cosine of angle, default: 0.707 = 45°)
         // Common values: 0.866 (30°), 0.707 (45°), 0.5 (60°), 0.0 (90°)
@@ -158,7 +158,7 @@ class IMUSensor
 
         // Get the current dot product (for debugging)
         // Returns value between -1.0 and 1.0
-        virtual float getDebugDotProduct() = 0;
+        virtual auto getDebugDotProduct() -> float = 0;
 
         // Get the current "up" vector (for debugging)
         virtual void getDebugUpVector(float *x, float *y, float *z) = 0;
@@ -210,35 +210,35 @@ class BNO055IMUSensor : public IMUSensor
         // IMPLEMENTATION OF IMUSensor INTERFACE
         // ============================================
 
-        bool init(bool verbose = false) override;
+        auto init(bool verbose = false) -> bool override;
         void update() override;
 
-        bool moving() override;
-        bool stable() override;
+        auto moving() -> bool override;
+        auto stable() -> bool override;
 
-        bool on_table() override;
-        IMU_Orientation orientation() override;
-        String getOrientationString() override;
+        auto on_table() -> bool override;
+        auto orientation() -> IMU_Orientation override;
+        auto getOrientationString() -> String override;
 
-        float gyroX() override;
-        float gyroY() override;
-        float gyroZ() override;
+        auto gyroX() -> float override;
+        auto gyroY() -> float override;
+        auto gyroZ() -> float override;
 
-        float accelX() override;
-        float accelY() override;
-        float accelZ() override;
-        float getAccelMagnitude() override;
-        float getAccelChange() override;
+        auto accelX() -> float override;
+        auto accelY() -> float override;
+        auto accelZ() -> float override;
+        auto getAccelMagnitude() -> float override;
+        auto getAccelChange() -> float override;
 
         void getCalibration(uint8_t *system, uint8_t *gyro, uint8_t *accel, uint8_t *mag) override;
-        bool isCalibrated() override;
+        auto isCalibrated() -> bool override;
 
         void resetTumbleDetection() override;
-        bool tumbled() override;
-        float getTumbleAngle() override;
+        auto tumbled() -> bool override;
+        auto getTumbleAngle() -> float override;
         void setTumbleThreshold(float threshold) override;
 
-        float getDebugDotProduct() override;
+        auto getDebugDotProduct() -> float override;
         void getDebugUpVector(float *x, float *y, float *z) override;
         void getDebugUpStart(float *x, float *y, float *z) override;
         void printDebugInfo() override;
@@ -300,9 +300,9 @@ class BNO055IMUSensor : public IMUSensor
         static const uint8_t BNO055_AXIS_MAP_SIGN_ADDR = 0x42;
 
         // Internal helper functions
-        IMU_Orientation detectOrientation();
+        auto detectOrientation() -> IMU_Orientation;
         void applyAxisRemap();
-        uint8_t readRegister(uint8_t reg);
+        auto readRegister(uint8_t reg) -> uint8_t;
         void writeRegister(uint8_t reg, uint8_t value);
         void updateUpVector(float deltaTime); // Apply rotation matrices
 };

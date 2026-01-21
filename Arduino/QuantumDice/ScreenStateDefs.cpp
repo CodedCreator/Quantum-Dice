@@ -1,10 +1,9 @@
 #include <Arduino.h>
 #include "defines.hpp"
-#include "IMUhelpers.hpp"
 #include "handyHelpers.hpp"
 #include "Screenfunctions.hpp"
 #include "ScreenDeterminator.hpp"  //TruthTable to select screens from various states
-                                 //#include "StateMachine.hpp"
+                                   //#include "StateMachine.hpp"
 #include "ScreenStateDefs.hpp"
 
 State stateSelf, stateSister;  //state is used for TruthTable. Is copy of currenState.
@@ -104,7 +103,7 @@ void printDiceStateName2(const char *objectName, DiceStates diceState) {
     }
 }
 
-bool findValues(State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) {
+auto findValues(State  /*state*/, DiceStates  /*diceState*/, DiceNumbers  /*diceNumber*/, UpSide  /*upSide*/, ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) -> bool {
     // bool findValues(State state, DiceNumbers diceNumber, UpSide upSide,
     //                 ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) {
     // bool findValues(State state, UpSide upSide, UpSide upSideSister,
@@ -123,7 +122,7 @@ bool findValues(State state, DiceStates diceState, DiceNumbers diceNumber, UpSid
     return false;  // No match found
 }
 
-void callFunction(ScreenStates result, screenselections screens) {
+static void callFunction(ScreenStates result, screenselections screens) {
     switch (result) {
         case ScreenStates::GODDICE:
             displayEinstein(screens);
@@ -227,32 +226,32 @@ void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, Sc
 
     if (x0 != prevX0) {
         //debug("X0:");
-        callFunction(x0, X0);
+        callFunction(x0, screenselections::X0);
         prevX0 = x0;
     }
     if (y0 != prevY0) {
         //debug("Y0:");
-        callFunction(y0, Y0);
+        callFunction(y0, screenselections::Y0);
         prevY0 = y0;
     }
     if (z0 != prevZ0) {
         //debug("Z0:");
-        callFunction(z0, Z0);
+        callFunction(z0, screenselections::Z0);
         prevZ0 = z0;
     }
     if (x1 != prevX1) {
         //debug("X1:");
-        callFunction(x1, X1);
+        callFunction(x1, screenselections::X1);
         prevX1 = x1;
     }
     if (y1 != prevY1) {
         //debug("Y1:");
-        callFunction(y1, Y1);
+        callFunction(y1, screenselections::Y1);
         prevY1 = y1;
     }
     if (z1 != prevZ1) {
         //debug("Z1:");
-        callFunction(z1, Z1);
+        callFunction(z1, screenselections::Z1);
         prevZ1 = z1;
     }
 }
@@ -266,7 +265,7 @@ void refreshScreens() {
         // No match found, handle accordingly
     }
 }
-DiceNumbers selectOneToSix() {
+auto selectOneToSix() -> DiceNumbers {
 
     //int randomNumber = (int)ECCX08.random(6) + 1;
     uint8_t randomNumber = generateDiceRoll();
@@ -275,26 +274,22 @@ DiceNumbers selectOneToSix() {
     switch (randomNumber) {  //dit kan vast handiger
         case 1:
             return DiceNumbers::ONE;
-            break;
         case 2:
             return DiceNumbers::TWO;
-            break;
         case 3:
             return DiceNumbers::THREE;
-            break;
         case 4:
             return DiceNumbers::FOUR;
-            break;
         case 5:
             return DiceNumbers::FIVE;
-            break;
         case 6:
             return DiceNumbers::SIX;
-            break;
+        default:
+            return DiceNumbers::ONE;
     }
     return DiceNumbers::ONE;
 }
-DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop) {
+auto selectOppositeOneToSix(DiceNumbers diceNumberTop) -> DiceNumbers {
     debugln("select opposite number");
     switch (diceNumberTop) {  //select the opposite value
         case DiceNumbers::ONE:

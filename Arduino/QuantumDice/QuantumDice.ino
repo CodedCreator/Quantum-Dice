@@ -1,5 +1,3 @@
-
-//version control see Version.h
 #warning "Compile with Pin Numbering By GPIO (legacy)"
 #warning "ESP version 3.3.2 ,board esp32/Arduino Nano ESP32 or esp32/ESP32S3 Dev Module
 
@@ -10,6 +8,7 @@
 #include "Screenfunctions.hpp"
 #include "handyHelpers.hpp"
 #include "StateMachine.hpp"
+#include "DiceConfigManager.hpp"
 
 StateMachine stateMachine;
 
@@ -24,28 +23,26 @@ void setup() {
     // Initialize serial for debugging
     initSerial();  // delay(1000) included
 
-    // Initialize EEPROM ONCE for both config and IMU calibration
-    initEEPROM();
-
-    // Load dice configuration from EEPROM
-    // This MUST be done early because it initializes hwPins which are needed for displays
-    if (!loadConfigFromEEPROM()) {
-        Serial.println("FATAL ERROR: Cannot load configuration!");
-        Serial.println("Please flash configuration using the setup sketch.");
-        // Halt execution - can't proceed without valid configuration
-        while (1) {
-            delay(1000);
-        }
-    }
-
     // Print version and configuration info
     Serial.println("\n" __FILE__ " " __DATE__ " " __TIME__);
     Serial.print("FW: ");
-    Serial.print(VERSION);
+    Serial.println(VERSION);
+
+    // Load config
+    if (!loadGlobalConfig(true)) {
+        Serial.println("Config failed!");
+    }
+    printGlobalConfig();
+
+    // intitialise the hardware pins and display addresses
+    initHardwarePins();
+
     Serial.print(" - Dice ID: ");
     Serial.println(currentConfig.diceId);  // Use diceId from config
     Serial.print("Board type: ");
     Serial.println(currentConfig.isNano ? "NANO" : "DEVKIT");  // Use config instead of defines
+    Serial.print("Connectie type isSMD: ");
+    Serial.println(currentConfig.isSMD ? "SMD" : "HDR");  // Use config instead of defines
 
     // Initialize displays - now uses hwPins from loaded configuration
     initDisplays();

@@ -5,13 +5,14 @@
 #include "Screenfunctions.hpp"
 #include "StateMachine.hpp"
 #include "EspNowSensor.hpp"
+#include "DiceConfigManager.hpp"
 
 using message_type = enum message_type: uint8_t {
     MESSAGE_TYPE_WATCH_DOG,
-    MESSAGE_TYPE_MEASUREMENT,
-    MESSAGE_TYPE_ENTANGLE_REQUEST,
-    MESSAGE_TYPE_ENTANGLE_CONFIRM,
-    MESSAGE_TYPE_ENTANGLE_STOP
+        MESSAGE_TYPE_MEASUREMENT,
+        MESSAGE_TYPE_ENTANGLE_REQUEST,
+        MESSAGE_TYPE_ENTANGLE_CONFIRM,
+        MESSAGE_TYPE_ENTANGLE_STOP
 };
 
 using message = struct message {
@@ -211,17 +212,17 @@ void StateMachine::update() {
     uint8_t source[6];
     int32_t current_rssi;
 
-    while (EspNowSensor<message>::Poll(&data, source, &current_rssi)) {
+    while (EspNowSensor<message>::Poll(&data, (unsigned char *) source, &current_rssi)) {
         switch (data.type) {
             case message_type::MESSAGE_TYPE_WATCH_DOG:  // watch dog, send by all dices
-                if (memcmp(source, this->current_peer, 6) == 0) {
+                if (memcmp((void *) source, this->current_peer, 6) == 0) {
                     stateSister = data.data.watchDog.state;
                 }
                 break;
 
             case message_type::MESSAGE_TYPE_MEASUREMENT:  //send by 2 entangled dices to each other  (A <->B1 or A<->B2). Just store the data in the sisterStates
                 debug("measurement data received from ");
-                if (memcmp(source, this->current_peer, 6) == 0) {
+                if (memcmp((void *) source, this->current_peer, 6) == 0) {
                     stateSister = data.data.measurement.state;
                     diceStateSister = data.data.measurement.diceState;
                     diceNumberSister = data.data.measurement.diceNumber;
@@ -232,7 +233,7 @@ void StateMachine::update() {
 
             case message_type::MESSAGE_TYPE_ENTANGLE_REQUEST:
                 last_rssi = current_rssi;
-                memcpy(last_source, source, 6);
+                memcpy((void *) last_source, (void *) source, 6);
                 break;
 
             case message_type::MESSAGE_TYPE_ENTANGLE_CONFIRM:  //device A receives confirmation entangle request
@@ -327,12 +328,12 @@ void StateMachine::enterINITENTANGLED_AB1() {
 
     //before changing the entangled states, send the currentstate of B1 to B2
     uint8_t empty[6];
-    memset(empty, 0xFF, 6);
-    if (memcmp(this->current_peer, empty, 6) != 0) {
+    memset((void *) empty, 0xFF, 6);
+    if (memcmp(this->current_peer, (void *) empty, 6) != 0) {
         debugln("End entanglement");
         delay(100);
         sendStopEntanglement(this->current_peer);
-        memcpy(this->current_peer, empty, 6);
+        memcpy(this->current_peer, (void *) empty, 6);
     }
 
     //reset all states
@@ -518,19 +519,19 @@ void StateMachine::whileTHROWING() {
     } else if (_imuSensor->stable() && _imuSensor->on_table()) {
         //  } else if (_imuSensor->isNotMoving() && (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND))) {
         debugln("stable and on table triggered");
-        changeState(Trigger::nonMoving);
+    changeState(Trigger::nonMoving);
+}
+//when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
+if (measurementReceived) {
+    measurementReceived = false;
+    prevDiceStateSelf = diceStateSelf;  //store for the future
+    if (diceStateSelf == DiceStates::ENTANGLED_AB1) {
+        diceStateSelf = DiceStates::UN_ENTANGLED_AB1;
+    } else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
+        diceStateSelf = DiceStates::UN_ENTANGLED_AB2;
     }
-    //when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
-    if (measurementReceived) {
-        measurementReceived = false;
-        prevDiceStateSelf = diceStateSelf;  //store for the future
-        if (diceStateSelf == DiceStates::ENTANGLED_AB1) {
-            diceStateSelf = DiceStates::UN_ENTANGLED_AB1;
-        } else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
-            diceStateSelf = DiceStates::UN_ENTANGLED_AB2;
-        }
-        refreshScreens();  //update screens ackordingly
-    }
+    refreshScreens();  //update screens ackordingly
+}
 };
 
 void StateMachine::enterINITMEASURED() {
@@ -557,38 +558,38 @@ void StateMachine::enterINITMEASURED() {
     IMU_Orientation orient = _imuSensor->orientation();
 
     switch (orient) {
-        case ORIENTATION_Z_UP:
+        case IMU_Orientation::ORIENTATION_Z_UP:
             measureAxisSelf = MeasuredAxises::ZAXIS;
             upSideSelf = UpSide::Z0;
             debugln("upside Z+");
             break;
-        case ORIENTATION_Z_DOWN:
+        case IMU_Orientation::ORIENTATION_Z_DOWN:
             measureAxisSelf = MeasuredAxises::ZAXIS;
             upSideSelf = UpSide::Z1;
             debugln("upside Z-");
             break;
-        case ORIENTATION_X_UP:
+        case IMU_Orientation::ORIENTATION_X_UP:
             measureAxisSelf = MeasuredAxises::XAXIS;
             upSideSelf = UpSide::X0;
             debugln("upside X+");
             break;
-        case ORIENTATION_X_DOWN:
+        case IMU_Orientation::ORIENTATION_X_DOWN:
             measureAxisSelf = MeasuredAxises::XAXIS;
             upSideSelf = UpSide::X1;
             debugln("upside X-");
             break;
-        case ORIENTATION_Y_UP:
+        case IMU_Orientation::ORIENTATION_Y_UP:
             measureAxisSelf = MeasuredAxises::YAXIS;
             upSideSelf = UpSide::Y0;
             debugln("upside Y+");
             break;
-        case ORIENTATION_Y_DOWN:
+        case IMU_Orientation::ORIENTATION_Y_DOWN:
             measureAxisSelf = MeasuredAxises::YAXIS;
             upSideSelf = UpSide::Y1;
             debugln("upside Y-");
             break;
-        case ORIENTATION_TILTED:
-        case ORIENTATION_UNKNOWN:
+        case IMU_Orientation::ORIENTATION_TILTED:
+        case IMU_Orientation::ORIENTATION_UNKNOWN:
             debugln("no clear axis");
             changeState(Trigger::measurementFail);  //back to throwing state
             return;                                 // Stay in current state

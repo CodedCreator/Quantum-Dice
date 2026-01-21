@@ -9,11 +9,13 @@ For further information see [Quantum Dice by University of Twente](https://www.u
 You can find more information about the dice in our article, including didactical approaches, for which a preprint is available on [*arXiv*](https://arxiv.org/abs/2510.04931)
 
 Content of this repo:
+
 - [Arduino Code](/Arduino/)
-- [Firmware flashing tool](https://qlab-utwente.github.io/Quantum-Dice-by-UTwente/)
+- [Firmware upload procedure](Arduino/README.md)
 - [3D printfiles](/3D%20print%20files/)
 - [Construction manual](/3D%20print%20files/ConstructionManual.md)
 - [Bill of Material and parts sourcing calculator](/3D%20print%20files/Bill%20of%20Material%20quantum%20dice.xlsx)
+- [Arduino Technical documentation](<Arduino/QuantumDice/technical documentation.md>) and [Installation and configuration Arduino IDE](Arduino/QuantumDice/README.md)
 
 ## Contribution
 

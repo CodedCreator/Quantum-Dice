@@ -3,41 +3,7 @@
 
 #include "IMUhelpers.hpp"
 #include <Button2.h>
-#include <EEPROM.h>
-#include <sys/_stdint.h>
-
-// EEPROM Memory Layout
-#define EEPROM_SIZE 512
-#define EEPROM_BNO_SENSOR_ID_ADDR 0   // 4 bytes for sensor ID (long)
-#define EEPROM_BNO_CALIBRATION_ADDR 4 // 20 bytes for calibration data
-#define EEPROM_CONFIG_ADDRESS \
-    32      // Moved to avoid overlap with BNO calibration data
-
-// Memory layout: [0-3: BNO ID][4-31: BNO Calibration][32+: Device Config]
-
-// Configuration structure to store in EEPROM
-struct DiceConfig {
-    char     diceId[16];      // "TEST1", "BART1", etc.
-    uint8_t  deviceA_mac[6];  // MAC address of device A
-    uint8_t  deviceB1_mac[6]; // MAC address of device B1
-    uint8_t  deviceB2_mac[6]; // MAC address of device B2
-    uint16_t x_background;    // Display background colors
-    uint16_t y_background;
-    uint16_t z_background;
-    uint16_t entang_ab1_color;
-    uint16_t entang_ab2_color;
-    int8_t   rssiLimit;   // RSSI limit for entanglement detection
-    bool     isSMD;       // true for SMD, false for HDR
-    bool     isNano;      // true for NANO, false for DEVKIT
-    bool     alwaysSeven; // Force dice to always produce 7
-
-    // Additional constants previously in diceConfig.h
-    uint8_t  randomSwitchPoint; // Threshold for random value (0-100)
-    float    tumbleConstant;    // Number of tumbles to detect tumbling
-    uint32_t deepSleepTimeout;  // Deep sleep timeout in milliseconds
-
-    uint8_t checksum; // Simple checksum for validation
-};
+#include <cstdint>
 
 // Hardware pin assignments structure
 struct HardwarePins {
@@ -57,16 +23,7 @@ struct HardwarePins {
 };
 
 // Global configuration and hardware objects
-extern DiceConfig   currentConfig;
 extern HardwarePins hwPins;
-
-// EEPROM functions
-void initEEPROM();
-bool loadConfigFromEEPROM();
-// uint8_t calculateChecksum(const DiceConfig& config);
-bool validateConfig(const DiceConfig &config);
-void printConfig(const DiceConfig &config);
-void printEEPROMMemoryMap();
 
 // Hardware initialization
 void initHardwarePins();
@@ -78,15 +35,15 @@ extern Button2           button;
 extern bool              clicked;
 extern bool              longclicked;
 
-void  initButton();
-void  longClickDetected(Button2 &btn);
-void  click(Button2 &btn);
-void  checkTimeForDeepSleep(IMUSensor *imuSensor);
-bool  checkMinimumVoltage();
-float mapFloat(float x, float in_min, float in_max, float out_min, float out_max, bool clipOutput);
-bool  withinBounds(float val, float minimum, float maximum);
-void  initSerial();
-uint8_t generateDiceRollRejection();
-uint8_t generateDiceRoll();
+void initButton();
+void longClickDetected(Button2 &btn);
+void click(Button2 &btn);
+void checkTimeForDeepSleep(IMUSensor *imuSensor);
+auto checkMinimumVoltage() -> bool;
+auto mapFloat(float x, float in_min, float in_max, float out_min, float out_max, bool clipOutput) -> float;
+auto withinBounds(float val, float minimum, float maximum) -> bool;
+void initSerial();
+auto generateDiceRollRejection() -> uint8_t;
+auto generateDiceRoll() -> uint8_t;
 
 #endif /* HANDYHELPERS_H_ */

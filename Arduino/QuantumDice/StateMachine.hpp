@@ -16,13 +16,13 @@ enum class UpSide : uint8_t;
 
 class StateMachine;  // Forward declaration
 
-#define IDLETIME 3000                //5000 ms-en
-#define SHOWNEWSTATETIME 1000        //ms-en to show when new state is initated
-#define MAXENTANGLEDWAITTIME 120000  //ms-en wait for throw in entangled wait, befor return to intitSingle state
-#define STABTIME 200                 //ms-en to stabilize after measurement
+constexpr unsigned int IDLETIME = 3000;               //5000 ms-en
+constexpr unsigned int SHOWNEWSTATETIME = 1000;       //ms-en to show when new state is initated
+constexpr unsigned int MAXENTANGLEDWAITTIME  = 120000; //ms-en wait for throw in entangled wait, befor return to intitSingle state
+constexpr unsigned int STABTIME = 200;                //ms-en to stabilize after measurement
                                      //#define WAITTOTHROW 1000            //minumum time it stays in wait to trow
 
-enum class State {
+enum class State: uint8_t {
     IDLE,
     INITSINGLE,
     INITENTANGLED_AB1,
@@ -35,7 +35,7 @@ enum class State {
     INITSINGLE_AFTER_ENT
 };
 
-enum class Trigger {
+enum class Trigger: uint8_t {
     onthemove,
     nonMoving,
     startRolling,

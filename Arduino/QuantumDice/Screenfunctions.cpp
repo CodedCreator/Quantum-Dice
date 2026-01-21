@@ -3,8 +3,10 @@
 #include <Adafruit_GC9A01A.h>
 #include <Arduino.h>
 
+#include <algorithm>
+
 #include "defines.hpp"
-#include "Globals.hpp"
+#include "DiceConfigManager.hpp"
 #include "handyHelpers.hpp"
 #include "ImageLibrary/ImageLibrary.hpp"
 #include "ScreenStateDefs.hpp"
@@ -22,7 +24,7 @@ screenselections selectScreen;
 void selectScreens(uint8_t binaryCode) {
     // Use hwPins from handyHelpers
     for (int i = 0; i < 6; i++) {
-        if (hwPins.screenAddress[binaryCode] & (1 << i)) {
+        if ((hwPins.screenAddress[binaryCode] & (1 << i)) != 0) {
             digitalWrite(hwPins.screen_cs[i], LOW); // Activate device
         } else {
             digitalWrite(hwPins.screen_cs[i], HIGH); // Deactivate device
@@ -66,7 +68,7 @@ void blankScreen(uint8_t screens) {
 }
 
 // Function to blend colors with transparency
-uint16_t blendColor(uint16_t foreground, uint16_t background, float alpha) {
+auto blendColor(uint16_t foreground, uint16_t background, float alpha) -> uint16_t {
     // Constrain alpha between 0 and 1
     alpha = constrain(alpha, 0.0, 1.0);
 
@@ -80,9 +82,9 @@ uint16_t blendColor(uint16_t foreground, uint16_t background, float alpha) {
     uint8_t bB = background & 0x1F;
 
     // Blend color components
-    uint8_t rR = (fR * alpha + bR * (1 - alpha));
-    uint8_t rG = (fG * alpha + bG * (1 - alpha));
-    uint8_t rB = (fB * alpha + bB * (1 - alpha));
+    uint8_t rR = ((fR * alpha) + (bR * (1 - alpha)));
+    uint8_t rG = ((fG * alpha) + (bG * (1 - alpha)));
+    uint8_t rB = ((fB * alpha) + (bB * (1 - alpha)));
 
     // Reconstruct 16-bit color
     return ((rR & 0x1F) << 11) | ((rG & 0x3F) << 5) | (rB & 0x1F);
@@ -99,7 +101,7 @@ void displayImageWithBackground(const unsigned short *image, uint8_t screens) {
     selectScreens(screens);
 
     // Choose background color based on screen - use config values
-    uint16_t backgroundColor;
+    uint16_t backgroundColor = 0;
     switch (screens) {
         case XX: backgroundColor = currentConfig.x_background; break;
         case YY: backgroundColor = currentConfig.y_background; break;
@@ -117,7 +119,7 @@ void displayImageWithBackground(const unsigned short *image, uint8_t screens) {
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             // Calculate pixel index
-            uint32_t pixelIndex = y * WIDTH + x;
+            uint32_t pixelIndex = (y * WIDTH) + x;
 
             // Read pixel color from PROGMEM
             uint16_t pixelColor = pgm_read_word(&image[pixelIndex]);
@@ -188,7 +190,7 @@ void displayLowBattery(uint8_t screens) {
     tft.setFont(&FreeSansBold18pt7b);
     tft.setTextSize(1);
 
-    drawStringCentered(tft, "Low Battery", tft.height() / 2 + 9);
+    drawStringCentered(tft, "Low Battery", (tft.height() / 2) + 9);
 }
 
 void displayNewDie(uint8_t screens) {
@@ -296,12 +298,12 @@ void displayMix1to6(uint8_t screens) {
     int centerY = tft.height() / 2;
     int offset  = DOT_OFFSET;
 
-    drawDot(centerX - offset, centerY - offset, 3 * 0.16 + 0.2);
-    drawDot(centerX + offset, centerY - offset, 5 * 0.16 + 0.2);
-    drawDot(centerX - offset, centerY, 1 * 0.16 + 0.2);
+    drawDot(centerX - offset, centerY - offset, (3 * 0.16) + 0.2);
+    drawDot(centerX + offset, centerY - offset, (5 * 0.16) + 0.2);
+    drawDot(centerX - offset, centerY, (1 * 0.16) + 0.2);
     drawDot(centerX + offset, centerY, 1 * 0.2);
-    drawDot(centerX - offset, centerY + offset, 5 * 0.16 + 0.2);
-    drawDot(centerX + offset, centerY + offset, 3 * 0.16 + 0.2);
+    drawDot(centerX - offset, centerY + offset, (5 * 0.16) + 0.2);
+    drawDot(centerX + offset, centerY + offset, (3 * 0.16) + 0.2);
     drawDot(centerX, centerY, 3 * 0.2);
 }
 
@@ -313,13 +315,13 @@ void displayMix1to6_entAB1(uint8_t screens) {
     int offset  = DOT_OFFSET;
 
     // Use entanglement color from config
-    drawDot(centerX - offset, centerY - offset, 3 * 0.16 + 0.2, currentConfig.entang_ab1_color);
-    drawDot(centerX + offset, centerY - offset, 5 * 0.16 + 0.2, currentConfig.entang_ab1_color);
-    drawDot(centerX - offset, centerY, 1 * 0.16 + 0.2, currentConfig.entang_ab1_color);
-    drawDot(centerX + offset, centerY, 1 * 0.16 + 0.2, currentConfig.entang_ab1_color);
-    drawDot(centerX - offset, centerY + offset, 5 * 0.16 + 0.2, currentConfig.entang_ab1_color);
-    drawDot(centerX + offset, centerY + offset, 3 * 0.16 + 0.2, currentConfig.entang_ab1_color);
-    drawDot(centerX, centerY, 3 * 0.16 + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX - offset, centerY - offset, (3 * 0.16) + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX + offset, centerY - offset, (5 * 0.16) + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX - offset, centerY, (1 * 0.16) + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX + offset, centerY, (1 * 0.16) + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX - offset, centerY + offset, (5 * 0.16) + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX + offset, centerY + offset, (3 * 0.16) + 0.2, currentConfig.entang_ab1_color);
+    drawDot(centerX, centerY, (3 * 0.16) + 0.2, currentConfig.entang_ab1_color);
 }
 
 void displayMix1to6_entAB2(uint8_t screens) {
@@ -330,17 +332,17 @@ void displayMix1to6_entAB2(uint8_t screens) {
     int offset  = DOT_OFFSET;
 
     // Use entanglement color from config
-    drawDot(centerX - offset, centerY - offset, 3 * 0.16 + 0.2, currentConfig.entang_ab2_color);
-    drawDot(centerX + offset, centerY - offset, 5 * 0.16 + 0.2, currentConfig.entang_ab2_color);
-    drawDot(centerX - offset, centerY, 1 * 0.16 + 0.2, currentConfig.entang_ab2_color);
-    drawDot(centerX + offset, centerY, 1 * 0.16 + 0.2, currentConfig.entang_ab2_color);
-    drawDot(centerX - offset, centerY + offset, 5 * 0.16 + 0.2, currentConfig.entang_ab2_color);
-    drawDot(centerX + offset, centerY + offset, 3 * 0.16 + 0.2, currentConfig.entang_ab2_color);
-    drawDot(centerX, centerY, 3 * 0.16 + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX - offset, centerY - offset, (3 * 0.16) + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX + offset, centerY - offset, (5 * 0.16) + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX - offset, centerY, (1 * 0.16) + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX + offset, centerY, (1 * 0.16) + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX - offset, centerY + offset, (5 * 0.16) + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX + offset, centerY + offset, (3 * 0.16) + 0.2, currentConfig.entang_ab2_color);
+    drawDot(centerX, centerY, (3 * 0.16) + 0.2, currentConfig.entang_ab2_color);
 }
 
 void printChar(uint8_t screens, char *letters, uint16_t fontcolor, uint16_t bckcolor, int x,
-               int y) {
+        int y) {
     selectScreens(screens);
     tft.fillScreen(bckcolor);
     tft.setTextColor(fontcolor);
@@ -352,8 +354,10 @@ void printChar(uint8_t screens, char *letters, uint16_t fontcolor, uint16_t bckc
 
 void drawStringCentered(Adafruit_GFX &gfx, const String &text, int16_t y) {
     // Variables to store text bounds
-    int16_t  x1, y1;
-    uint16_t w, h;
+    int16_t  x1 = 0;
+    int16_t  y1 = 0;
+    uint16_t w = 0;
+    uint16_t h = 0;
 
     // Get the text bounds
     gfx.getTextBounds(text, 0, y, &x1, &y1, &w, &h);
@@ -374,47 +378,47 @@ void voltageIndicator(uint8_t screens) {
     selectScreens(screens);
 
     // Use hwPins.adc_pin from configuration
-    float voltage    = analogReadMilliVolts(hwPins.adc_pin) / 1000.0 * 2.0;
-    float percentage = mapFloat(voltage, MINBATERYVOLTAGE, MAXBATERYVOLTAGE, 0.0, 100.0, true);
-    if (percentage > 100.0) {
-        percentage = 100.0;
-    }
-    dtostrf(voltage, 3, 2, bufferV);
-    strcat(bufferV, "V");
-    dtostrf(percentage, 3, 0, bufferPerc);
-    strcat(bufferPerc, "%");
+    double voltage    = analogReadMilliVolts(hwPins.adc_pin) / 1000.0 * 2.0;
+    double percentage = mapFloat( (float) voltage, MINBATERYVOLTAGE, MAXBATERYVOLTAGE, 0.0, 100.0, true);
+    percentage = std::min<double>(percentage, 100.0);
+    dtostrf(voltage, 3, 2, (char *) bufferV);
+    strcat((char *) bufferV, "V");
+    dtostrf(percentage, 3, 0, (char *) bufferPerc);
+    strcat((char *) bufferPerc, "%");
 
     // Clear the canvas
     staticCanvas.fillScreen(GC9A01A_BLACK);
 
     // Set text properties
     (percentage > 20) ? staticCanvas.setTextColor(GC9A01A_WHITE)
-                      : staticCanvas.setTextColor(GC9A01A_RED);
+        : staticCanvas.setTextColor(GC9A01A_RED);
     staticCanvas.setTextSize(1);
     staticCanvas.setFont(&FreeSans18pt7b);
 
     // Draw centered text
-    int16_t  x1, y1;
-    uint16_t w, h;
+    int16_t  x1 = 0;
+    int16_t  y1 = 0;
+    uint16_t w = 0;
+    uint16_t h = 0;
 
     // Center voltage text
-    staticCanvas.getTextBounds(bufferV, 0, 0, &x1, &y1, &w, &h);
+    staticCanvas.getTextBounds((char *) bufferV, 0, 0, &x1, &y1, &w, &h);
     int16_t x = (staticCanvas.width() - w) / 2;
     staticCanvas.setCursor(x, 30);
-    staticCanvas.print(bufferV);
+    staticCanvas.print((char *) bufferV);
 
     // Center percentage text
-    staticCanvas.getTextBounds(bufferPerc, 0, 0, &x1, &y1, &w, &h);
+    staticCanvas.getTextBounds((char *) bufferPerc, 0, 0, &x1, &y1, &w, &h);
     x = (staticCanvas.width() - w) / 2;
     staticCanvas.setCursor(x, 70);
-    staticCanvas.print(bufferPerc);
+    staticCanvas.print((char *) bufferPerc);
 
     // Draw a horizontal line
     staticCanvas.drawFastHLine(0, 40, 5, GC9A01A_RED);
 
     // Draw the canvas to the TFT
     tft.drawRGBBitmap(0, 140, staticCanvas.getBuffer(), staticCanvas.width(),
-                      staticCanvas.height());
+            staticCanvas.height());
 }
 
 void welcomeInfo(uint8_t screens) {
@@ -425,17 +429,26 @@ void welcomeInfo(uint8_t screens) {
     tft.setTextSize(1);
     tft.setFont(&FreeSans18pt7b);
 
-    strcpy(displayText1, "FW");
-    strcat(displayText1, VERSION);
-    drawStringCentered(tft, displayText1, 62);
+    strcpy((char *) displayText1, "FW");
+    strcat((char *) displayText1, VERSION);
+    drawStringCentered(tft, (char *) displayText1, 62);
 
     // Use DICE_ID from config
-    strcpy(displayText2, currentConfig.diceId);
-    if (isDeviceA) {
-        strcat(displayText2, " #A");
-    }
-    if (isDeviceB1 || isDeviceB2) {
-        strcat(displayText2, " #B");
-    }
-    drawStringCentered(tft, displayText2, 104);
+    strcpy((char *) displayText2, (char *) currentConfig.diceId);
+    drawStringCentered(tft, (char *) displayText2, 104);
+}
+
+void showConfigMode(uint8_t screens) {
+    selectScreens(screens);
+    // Clear the screen
+    tft.fillScreen(GC9A01A_BLACK);
+
+    // Set text color
+    tft.setTextColor(GC9A01A_RED);
+
+    // First line configuration
+    tft.setFont(&FreeSansBold18pt7b);
+    tft.setTextSize(1);
+
+    drawStringCentered(tft, "Setup Mode", (tft.height() / 2) + 9);
 }

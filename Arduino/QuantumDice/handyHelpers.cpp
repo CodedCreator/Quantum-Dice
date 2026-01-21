@@ -3,9 +3,9 @@
 #include "defines.hpp"
 #include "IMUhelpers.hpp"
 #include "handyHelpers.hpp"
+#include "DiceConfigManager.hpp"
 
 // Define global configuration object
-DiceConfig currentConfig;
 HardwarePins hwPins;
 
 // Existing global variables
@@ -114,210 +114,19 @@ void initHardwarePins() {
  * Print hardware pin configuration for debugging
  */
 void printHardwarePins() {
-    Serial.println("\n=== Hardware Pin Configuration ===");
-    Serial.printf("Board Type: %s\n", currentConfig.isNano ? "NANO" : "DEVKIT");
-    Serial.printf("Screen Type: %s\n", currentConfig.isSMD ? "SMD" : "HDR");
-    Serial.println("\nTFT Display Pins:");
-    Serial.printf("  CS:  GPIO%d\n", hwPins.tft_cs);
-    Serial.printf("  RST: GPIO%d\n", hwPins.tft_rst);
-    Serial.printf("  DC:  GPIO%d\n", hwPins.tft_dc);
-    Serial.println("\nScreen CS Pins:");
+    infoln("\n=== Hardware Pin Configuration ===");
+    infof("Board Type: %s\n", currentConfig.isNano ? "NANO" : "DEVKIT");
+    infof("Screen Type: %s\n", currentConfig.isSMD ? "SMD" : "HDR");
+    infoln("\nTFT Display Pins:");
+    infof("  CS:  GPIO%d\n", hwPins.tft_cs);
+    infof("  RST: GPIO%d\n", hwPins.tft_rst);
+    infof("  DC:  GPIO%d\n", hwPins.tft_dc);
+    infoln("\nScreen CS Pins:");
     for (int i = 0; i < 6; i++) {
-        Serial.printf("  Screen %d: GPIO%d\n", i, hwPins.screen_cs[i]);
+        infof("  Screen %d: GPIO%d\n", i, hwPins.screen_cs[i]);
     }
-    Serial.printf("\nADC Pin: GPIO%d\n", hwPins.adc_pin);
-    Serial.println("==================================\n");
-}
-
-/**
- * Initialize EEPROM with proper size
- * Note: This is called before IMU init, so both systems share the same EEPROM
- */
-void initEEPROM() {
-    if (!EEPROM.begin(EEPROM_SIZE)) {
-        Serial.println("ERROR: Failed to initialize EEPROM");
-    } else {
-        Serial.println("EEPROM initialized successfully");
-        Serial.printf("EEPROM size: %d bytes\n", EEPROM_SIZE);
-        Serial.printf("Configuration size: %d bytes\n", sizeof(DiceConfig));
-        printEEPROMMemoryMap();
-    }
-}
-
-/**
- * Print EEPROM memory layout for debugging
- */
-void printEEPROMMemoryMap() {
-    Serial.println("\n=== EEPROM Memory Map ===");
-    Serial.printf("BNO055 Sensor ID:    0x%04X - 0x%04X (%d bytes)\n",
-            EEPROM_BNO_SENSOR_ID_ADDR,
-            EEPROM_BNO_SENSOR_ID_ADDR + sizeof(long) - 1,
-            sizeof(long));
-    Serial.printf("BNO055 Calibration:  0x%04X - 0x%04X (%d bytes)\n",
-            EEPROM_BNO_CALIBRATION_ADDR,
-            EEPROM_BNO_CALIBRATION_ADDR + sizeof(adafruit_bno055_offsets_t) - 1,
-            sizeof(adafruit_bno055_offsets_t));
-    Serial.printf("Dice Configuration:  0x%04X - 0x%04X (%d bytes)\n",
-            EEPROM_CONFIG_ADDRESS,
-            EEPROM_CONFIG_ADDRESS + sizeof(DiceConfig) - 1,
-            sizeof(DiceConfig));
-    Serial.printf("Total used:          %d bytes\n",
-            EEPROM_CONFIG_ADDRESS + sizeof(DiceConfig));
-    Serial.printf("Free space:          %d bytes\n",
-            EEPROM_SIZE - (EEPROM_CONFIG_ADDRESS + sizeof(DiceConfig)));
-    Serial.println("========================\n");
-}
-
-// /**
-//  * Calculate simple checksum for configuration validation
-//  */
-// uint8_t calculateChecksum(const DiceConfig& config) {
-//   uint8_t checksum = 0;
-//   const uint8_t* data = (const uint8_t*)&config;
-//   // Calculate checksum over all bytes except the checksum field itself
-//   size_t dataSize = sizeof(DiceConfig) - sizeof(config.checksum);
-
-//   for (size_t i = 0; i < dataSize; i++) {
-//     checksum ^= data[i];
-//   }
-
-//   return checksum;
-// }
-
-/**
- * Validate configuration data
- */
-bool validateConfig(const DiceConfig& config) {
-    // Check if diceId is null-terminated and contains printable characters
-    bool validId = false;
-    for (int i = 0; i < 16; i++) {
-        if (config.diceId[i] == '\0') {
-            validId = (i > 0);  // At least one character before null
-            break;
-        }
-        if (!isprint(config.diceId[i])) {
-            Serial.println("ERROR: Invalid diceId characters");
-            return false;
-        }
-    }
-
-    if (!validId) {
-        Serial.println("ERROR: Invalid diceId format");
-        return false;
-    }
-
-    // // Validate checksum
-    // uint8_t calculatedChecksum = calculateChecksum(config);
-    // if (calculatedChecksum != config.checksum) {
-    //   Serial.printf("ERROR: Checksum mismatch (expected 0x%02X, got 0x%02X)\n",
-    //                 config.checksum, calculatedChecksum);
-    //   return false;
-    // }
-
-    // Validate RSSI limit is in reasonable range
-    if (config.rssiLimit > 0 || config.rssiLimit < -100) {
-        Serial.printf("ERROR: Invalid RSSI limit: %d\n", config.rssiLimit);
-        return false;
-    }
-
-    // Validate randomSwitchPoint (should be 0-100)
-    if (config.randomSwitchPoint > 100) {
-        Serial.printf("ERROR: Invalid randomSwitchPoint: %d\n", config.randomSwitchPoint);
-        return false;
-    }
-
-    // Validate tumbleConstant (should be positive and reasonable)
-    if (config.tumbleConstant <= 0 || config.tumbleConstant > 10.0) {
-        Serial.printf("ERROR: Invalid tumbleConstant: %.2f\n", config.tumbleConstant);
-        return false;
-    }
-
-    // Validate deepSleepTimeout (should be reasonable, e.g., 10 sec to 1 hour)
-    if (config.deepSleepTimeout < 10000 || config.deepSleepTimeout > 3600000) {
-        Serial.printf("ERROR: Invalid deepSleepTimeout: %lu ms\n", config.deepSleepTimeout);
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * Load configuration from EEPROM
- * Returns true if successful, false otherwise
- */
-bool loadConfigFromEEPROM() {
-    Serial.println("Loading configuration from EEPROM...");
-
-    // Read configuration from EEPROM
-    EEPROM.get(EEPROM_CONFIG_ADDRESS, currentConfig);
-
-    // Validate the loaded configuration
-    if (!validateConfig(currentConfig)) {
-        Serial.println("ERROR: Invalid configuration in EEPROM");
-        return false;
-    }
-
-    Serial.println("Configuration loaded successfully!");
-    printConfig(currentConfig);
-
-    // Initialize hardware pins based on loaded configuration
-    initHardwarePins();
-
-    return true;
-}
-
-/**
- * Print configuration for debugging
- */
-void printConfig(const DiceConfig& config) {
-    Serial.println("\n=== Dice Configuration ===");
-    Serial.print("Dice ID: ");
-    Serial.println(config.diceId);
-
-    Serial.print("Device A MAC: ");
-    for (int i = 0; i < 6; i++) {
-        Serial.printf("%02X", config.deviceA_mac[i]);
-        if (i < 5) Serial.print(":");
-    }
-    Serial.println();
-
-    Serial.print("Device B1 MAC: ");
-    for (int i = 0; i < 6; i++) {
-        Serial.printf("%02X", config.deviceB1_mac[i]);
-        if (i < 5) Serial.print(":");
-    }
-    Serial.println();
-
-    Serial.print("Device B2 MAC: ");
-    for (int i = 0; i < 6; i++) {
-        Serial.printf("%02X", config.deviceB2_mac[i]);
-        if (i < 5) Serial.print(":");
-    }
-    Serial.println();
-
-    Serial.printf("Background Colors:\n");
-    Serial.printf("  X: 0x%04X\n", config.x_background);
-    Serial.printf("  Y: 0x%04X\n", config.y_background);
-    Serial.printf("  Z: 0x%04X\n", config.z_background);
-    Serial.printf("Entanglement Colors:\n");
-    Serial.printf("  AB1: 0x%04X\n", config.entang_ab1_color);
-    Serial.printf("  AB2: 0x%04X\n", config.entang_ab2_color);
-
-    Serial.printf("RSSI Limit: %d dBm\n", config.rssiLimit);
-    Serial.printf("Hardware: %s, %s\n",
-            config.isSMD ? "SMD" : "HDR",
-            config.isNano ? "NANO" : "DEVKIT");
-    Serial.printf("Always Seven: %s\n", config.alwaysSeven ? "Yes" : "No");
-
-    Serial.printf("\nTiming Constants:\n");
-    Serial.printf("  Random Switch Point: %d\n", config.randomSwitchPoint);
-    Serial.printf("  Tumble Constant: %.2f\n", config.tumbleConstant);
-    Serial.printf("  Deep Sleep Timeout: %lu ms (%.1f minutes)\n",
-            config.deepSleepTimeout,
-            config.deepSleepTimeout / 60000.0);
-
-    Serial.printf("Checksum: 0x%02X\n", config.checksum);
-    Serial.println("==========================\n");
+    infof("\nADC Pin: GPIO%d\n", hwPins.adc_pin);
+    infoln("==================================\n");
 }
 
 void checkTimeForDeepSleep(IMUSensor* imuSensor) {
@@ -358,7 +167,7 @@ void click(Button2& btn) {
     clicked = true;
 }
 
-uint8_t generateDiceRoll() {
+auto generateDiceRoll() -> uint8_t {
     // Get a random 32-bit integer from the crypto chip
     uint32_t randomNumber = esp_random();
 
@@ -372,7 +181,7 @@ uint8_t generateDiceRoll() {
     return (randomNumber % 6) + 1;
 }
 
-uint8_t generateDiceRollRejection() {
+auto generateDiceRollRejection() -> uint8_t {
     uint8_t randomByte;
 
     do {
@@ -389,16 +198,13 @@ uint8_t generateDiceRollRejection() {
     return (randomByte % 6) + 1;
 }
 
-bool checkMinimumVoltage() {
-    float voltage = analogReadMilliVolts(hwPins.adc_pin) / 1000.0 * 2.0;  //ADC measures 50% of battery voltage by 50/50 voltage divider
-                                                                               //debugln(voltage);
-    if (voltage < MINBATERYVOLTAGE && voltage > 0.5)  //while on USB the voltage is 0
-        return true;
-    else
-        return false;
+auto checkMinimumVoltage() -> bool {
+    double voltage = analogReadMilliVolts(hwPins.adc_pin) / 1000.0 * 2.0;  //ADC measures 50% of battery voltage by 50/50 voltage divider
+                                                                                //debugln(voltage);
+    return (voltage < MINBATERYVOLTAGE && voltage > 0.5);  //while on USB the voltage is 0
 }
 
-float mapFloat(float x, float in_min, float in_max, float out_min, float out_max, bool clipOutput) {
+auto mapFloat(float x, float in_min, float in_max, float out_min, float out_max, bool clipOutput) -> float {
     float mappedValue = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 
     // Apply clipping if clipOutput is true
@@ -409,7 +215,7 @@ float mapFloat(float x, float in_min, float in_max, float out_min, float out_max
     return mappedValue;
 }
 
-bool withinBounds(float val, float minimum, float maximum) {
+auto withinBounds(float val, float minimum, float maximum) -> bool {
     return ((minimum <= val) && (val <= maximum));
 }
 

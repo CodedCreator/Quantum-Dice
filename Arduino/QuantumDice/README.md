@@ -33,6 +33,9 @@ This guide provides step-by-step instructions for programming and configuring th
 
 The QuantumDice is built on an **ESP32-S3 N16R8 module** and includes several key components:
 
+**Partitions:**
+A custom partition setting is used to include a **littlFS** partition. Therefor the file `partitions.csv` must be added to the sketch folder. See [partitions.csv](partitions.csv)
+
 **Display System:**
 
 - Six round TFT displays with SPI interface
@@ -52,14 +55,14 @@ The QuantumDice is built on an **ESP32-S3 N16R8 module** and includes several ke
 
 **Data Storage:**
 
-- Configuration data stored in EEPROM
-- Must be configured before first use using the separate QuantumDiceInitTool sketch
+- Configuration data stored in littleFS
+- Configuration file (called XXXXX_config.txt where XXXXX is the Set Name of the dice) must be uploaded to littleFs first.
+- See example layout [text](../TEST1_config.txt)
 
 **Reference Documentation:**
 
 - [ESP32-S3 N16R8 Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf)
 - [BNO055 IMU Datasheet](https://nl.mouser.com/datasheet/3/1046/1/bst-bno055-ds000.pdf)
-- [ATECC508A Datasheet](https://cdn.sparkfun.com/assets/learn_tutorials/1/0/0/3/Microchip_ATECC508A_Datasheet.pdf)
 
 ---
 
@@ -98,7 +101,7 @@ Select the following settings from the **Tools** menu:
 | **USB Mode** | USB-OTG (TinyUSB) or Hardware CDC and JTAG |
 | **Flash Size** | 16MB (128Mb) |
 | **PSRAM** | OPI PSRAM |
-| **Partition Scheme** | 16M Flash (3MB....) |
+| **Partition Scheme** | custom |
 
 ### 3.4 Install Required Libraries
 
@@ -139,7 +142,7 @@ The ESP32-S3 module has never been programmed and needs its first firmware uploa
 
 ### 4.1 Initial Upload - Blink Test
 
-When programming an ESP32-S3 for the first time, a specific initialization procedure is required. We'll use the built-in Blink example for this.
+When programming an ESP32-S3 for the first time, a specific initialization procedure is required. We'll use the Blink_to_Partitions example for this [Blink with Partitions](../Blink_to_Partitions). This sketch is a copy of the build-in sketch, but now with the custom `partitions.csv` included
 
 > **⚠️ REMINDER:** Disconnect the 4-wire power cable before connecting USB!
 
@@ -183,12 +186,12 @@ The Blink sketch is now running (though the LED may not be visible on this board
 
 ### 4.2 Board Configuration
 
-If your ProcessorBoard has never been configured, you must complete these steps using the **QuantumDiceInitTool.ino** sketch:
+The board configuration is performed with a XXXX_config.txt file. Use enclosed [TEST1_config.txt](../TEST1_config.txt) as a starter.
 
-- Obtain the board's MAC address
-- Configure QuantumDice settings and save to EEPROM
+Fill in the required data (mainly `diceId` and the `deviceA_mac`, `deviceB1_mac` and `deviceB2_mac` from the current ESP32 and the other ESP32 of the set)
 
-Refer to the QuantumDiceInitTool README for detailed instructions on this configuration process.
+Uploading the config file with
+[ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/) tool (need Google Chrome to run). Instructions on how to upload see ....
 
 ---
 
@@ -225,7 +228,6 @@ After uploading, open the **Serial Monitor** (baud rate: **115200**) to view deb
 
 The Serial Monitor will display:
 
-- EEPROM initialization and memory map
 - Loaded configuration (Dice ID, MAC addresses, colors, timing constants)
 - Hardware pin configuration
 - Display initialization
@@ -237,24 +239,101 @@ The Serial Monitor will display:
 **Example Output:**
 
 ```text
-EEPROM initialized successfully
-Configuration loaded successfully!
+/Users/xxxxxxx/Github/Quantum-Dice-by-UTwente/Arduino/QuantumDice/QuantumDice.ino Dec 29 2025 14:01:07
+FW: 1.3.0
+LittleFS mounted successfully
+No config path specified, searching for *_config.txt...
+Found config file: TEST1_config.txt
+Auto-detected config file: /TEST1_config.txt
+Config loaded successfully
+Loaded global config from: /TEST1_config.txt
+=== Global Configuration ===
 Dice ID: TEST1
-Device A MAC: D0:CF:13:36:40:88
+Device A MAC: D0:CF:13:36:17:DC
+Device B1 MAC: AA:BB:CC:DD:EE:02
+Device B2 MAC: DC:DA:0C:21:02:44
+X Background: 0x0000 (0)
+Y Background: 0x0000 (0)
+Z Background: 0x0000 (0)
+Entangle AB1 Color: 0xFFE0 (65504)
+Entangle AB2 Color: 0x07E0 (2016)
+RSSI Limit: -35 dBm
+Is SMD: false
+Is Nano: false
+Always Seven: false
+Random Switch Point: 50%
+Tumble Constant: 45.00
+Deep Sleep Timeout: 300000 ms
+Checksum: 0x00
+============================
+Initializing hardware pins...
 Hardware pins initialized successfully!
+
+=== Hardware Pin Configuration ===
+Board Type: DEVKIT
+Screen Type: HDR
+
+TFT Display Pins:
+  CS:  GPIO10
+  RST: GPIO48
+  DC:  GPIO47
+
+Screen CS Pins:
+  Screen 0: GPIO4
+  Screen 1: GPIO5
+  Screen 2: GPIO6
+  Screen 3: GPIO7
+  Screen 4: GPIO15
+  Screen 5: GPIO16
+
+ADC Pin: GPIO2
+==================================
+
+Dice ID: TEST1
+Board type: DEVKIT
 Initializing displays...
 Displays initialized successfully!
-BNO device found!
-Calibration data restored successfully
-IMU initialization complete
+Qlab logo on screen: 14
+Initializing BNO055... E (3521) i2c.master: I2C transaction unexpected nack detected
+E (3522) i2c.master: s_i2c_synchronous_transaction(945): I2C transaction failed
+E (3793) i2c.master: I2C transaction unexpected nack detected
+E (3793) i2c.master: s_i2c_synchronous_transaction(945): I2C transaction failed
+E (3795) i2c.master: i2c_master_transmit_receive(1248): I2C transaction failed
+detected.
+Applying axis remapping... done.
+Applying thumble threshold... done.
+Waiting for stable readings... OK (10.12 m/s² after 0 attempts)
+Stabilizing baseline... done.
+✓ BNO055 initialization complete!
 ESP-NOW initialized successfully!
-MAC Address is : D0:CF:13:33:58:5C
+MAC Address is : D0:CF:13:36:17:DC
+Self role: ROLE_A
+ESP-NOW initialized successfully!
+MAC Address is : D0:CF:13:36:17:DC
+StateMachine Begin: Calling onEntry for initial state
+------------ enter IDLE state -------------
+Curent diceState: : DiceStates::SINGLE
+Previous diceState: : DiceStates::SINGLE
+Last Packet SDelivery Fail
+WELCOME function called
+Einstein on screen: 2
+GODDICE function called
+Qlab logo on screen: 4
+QLAB_LOGO function called
+UTwente logo on screen: 1
+UT_LOGO function called
+Einstein on screen: 3
+GODDICE function called
+Einstein on screen: 5
+GODDICE function called
 Setup complete!
-```
+==================================
+
+stateMachine: CLASSIC_STATE
+DiceState: DiceStates::CLASSIC
+
 
 > **Note:** You may see some I2C error messages during initialization. These are typically harmless if the sensors are detected successfully afterward.
-
-If you see "System not calibrated" warnings, don't worry—this is normal during startup. The system will use the stored calibration data.
 
 **Your QuantumDice is now programmed and ready to use!**
 
@@ -273,7 +352,6 @@ If you see "System not calibrated" warnings, don't worry—this is normal during
 
 - Check I2C connections
 - Verify sensors are properly seated
-- Run the QuantumDiceInitTool if calibration data is missing
 
 **Display issues:**
 

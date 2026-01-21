@@ -3,7 +3,7 @@
 #define SCREENSTATEDEFS_H_
 
 #include "StateMachine.hpp"  // Ensure this is included
-                           //truth table at the end of this file
+                             //truth table at the end of this file
 
 extern State stateSelf, stateSister;  //use of the StateMachine inputs
 
@@ -110,7 +110,7 @@ struct TruthTableEntry {
 extern TruthTableEntry truthTable[];
 
 // Function prototypes
-bool findValues(State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState);
+auto findValues(State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) -> bool;
 
 //void printValues(ScreenStates x, ScreenStates y, ScreenStates z);
 
@@ -120,8 +120,8 @@ void callFunction(ScreenStates result);
 
 void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, ScreenStates y1, ScreenStates z0, ScreenStates z1);
 void refreshScreens();
-DiceNumbers selectOneToSix();
-DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop);
+auto selectOneToSix() -> DiceNumbers;
+auto selectOppositeOneToSix(DiceNumbers diceNumberTop) -> DiceNumbers;
 void printDiceStateName(const char *objectName, DiceStates diceState);
 void printDiceStateName2(const char *objectName, DiceStates diceState);
 
