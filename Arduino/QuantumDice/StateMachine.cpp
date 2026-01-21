@@ -1,10 +1,10 @@
-#include "defines.h"
-#include "ScreenStateDefs.h"
-#include "handyHelpers.h"
-#include "IMUhelpers.h"
-#include "Screenfunctions.h"
-#include "StateMachine.h"
-#include "EspNowSensor.h"
+#include "defines.hpp"
+#include "ScreenStateDefs.hpp"
+#include "handyHelpers.hpp"
+#include "IMUhelpers.hpp"
+#include "Screenfunctions.hpp"
+#include "StateMachine.hpp"
+#include "EspNowSensor.hpp"
 
 using message_type = enum message_type: uint8_t {
     MESSAGE_TYPE_WATCH_DOG,

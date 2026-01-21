@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <cstdint>
 
-#include "IMUhelpers.h"
+#include "IMUhelpers.hpp"
 
 #define FSM_UPDATE_INTERVAL 0  // Update interval in milliseconds
 #define MAC_ADDRESS_LENGTH 6
