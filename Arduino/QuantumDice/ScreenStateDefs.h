@@ -1,4 +1,4 @@
-#include <sys/_stdint.h>
+#include <cstdint>
 #ifndef SCREENSTATEDEFS_H_
 #define SCREENSTATEDEFS_H_
 
