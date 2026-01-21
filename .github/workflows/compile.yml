@@ -10,10 +10,10 @@ jobs:
           fetch-depth: 0
 
       - name: Install arduino-cli
-        runs: |
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | chmod +x | sh
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=~/local/bin sh
 
       - name: Compile the project
-        runs: |
+        run: |
           cd Arduino/QuantumDice
-          ../../bin/arduino-cli compile
+          arduino-cli compile
