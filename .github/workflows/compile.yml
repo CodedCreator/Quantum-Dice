@@ -1,0 +1,19 @@
+name: Compile code using arduino-cli
+on: pull_request
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install arduino-cli
+        runs: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | chmod +x | sh
+
+      - name: Compile the project
+        runs: |
+          cd Arduino/QuantumDice
+          ../../bin/arduino-cli compile
