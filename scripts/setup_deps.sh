@@ -4,8 +4,14 @@ set -e
 echo "=== Arduino ESP32 setup ==="
 
 # -------- Config --------
-ESP32_CORE="esp32:esp32"
-BOARD_FQBN="esp32:esp32:esp32"
+ESP32_CORE="esp32:esp32@3.3.2"
+BOARD_FQBN="esp32:esp32:esp32s3:\
+	USBMode=default,\
+	CDCOnBoot=cdc,\
+	FlashSize=16M,\
+	PartitionScheme=app3M_fat9M_16MB,\
+	PSRAM=opi
+"
 
 # -------- Sketch selection --------
 SKETCH_NAME="${1:-QuantumDice}"
