@@ -4,5 +4,6 @@ Checks:            'bugprone-*, cert-*, cppcoreguidelines-*, misc-*, modernize-*
 WarningsAsErrors:  'bugprone-*, cert-*'
 HeaderFileExtensions:         ['h', 'hh', 'hpp', 'hxx']
 ImplementationFileExtensions: ['c', 'cc', 'cpp', 'cxx', 'ino']
-HeaderFilterRegex: '.*'
+HeaderFilterRegex: '^Arduino/'
 FormatStyle:       file
+SystemHeaders:     false
