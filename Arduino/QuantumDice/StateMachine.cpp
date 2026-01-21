@@ -1,23 +1,21 @@
-#include "Arduino.h"
-#include "defines.h"
-#include "ScreenStateDefs.h"
-#include "handyHelpers.h"
-#include "IMUhelpers.h"
-#include "Screenfunctions.h"
-#include "StateMachine.h"
-#include "EspNowSensor.h"
+#include "defines.hpp"
+#include "ScreenStateDefs.hpp"
+#include "handyHelpers.hpp"
+#include "IMUhelpers.hpp"
+#include "Screenfunctions.hpp"
+#include "StateMachine.hpp"
+#include "EspNowSensor.hpp"
 
-typedef enum _message_type {
+using message_type = enum message_type: uint8_t {
     MESSAGE_TYPE_WATCH_DOG,
     MESSAGE_TYPE_MEASUREMENT,
     MESSAGE_TYPE_ENTANGLE_REQUEST,
     MESSAGE_TYPE_ENTANGLE_CONFIRM,
     MESSAGE_TYPE_ENTANGLE_STOP
-} message_type;
+};
 
-typedef struct _message {
+using message = struct message {
     message_type type;
-    Roles senderRole;
     union _data {
         struct _watchDogData {
             State state;
@@ -30,80 +28,24 @@ typedef struct _message {
             UpSide upSide;
         } measurement;
     } data;
-} message;
+};
 
+static uint8_t last_source[6];
+static int32_t last_rssi = 0;
 
 //definitions of functions related to states
 const StateMachine::StateFunctions StateMachine::stateFunctions[] = {
-    { &StateMachine::enterIDLE, &StateMachine::whileIDLE },
-    { &StateMachine::enterINITSINGLE, &StateMachine::whileINITSINGLE },
-    { &StateMachine::enterINITENTANGLED_AB1, &StateMachine::whileINITENTANGLED_AB1 },
-    { &StateMachine::enterWAITFORTHROW, &StateMachine::whileWAITFORTHROW },
-    { &StateMachine::enterTHROWING, &StateMachine::whileTHROWING },
-    { &StateMachine::enterINITMEASURED, &StateMachine::whileINITMEASURED },
-    { &StateMachine::enterLOWBATTERY, &StateMachine::whileLOWBATTERY },
-    { &StateMachine::enterCLASSIC_STATE, &StateMachine::whileCLASSIC_STATE },
-    { &StateMachine::enterINITENTANGLED_AB2, &StateMachine::whileINITENTANGLED_AB2 },
-    { &StateMachine::enterINITSINGLE_AFTER_ENT, &StateMachine::whileINITSINGLE_AFTER_ENT }
+    { .onEntry=&StateMachine::enterIDLE, .whileInState=&StateMachine::whileIDLE },
+    { .onEntry=&StateMachine::enterINITSINGLE, .whileInState=&StateMachine::whileINITSINGLE },
+    { .onEntry=&StateMachine::enterINITENTANGLED_AB1, .whileInState=&StateMachine::whileINITENTANGLED_AB1 },
+    { .onEntry=&StateMachine::enterWAITFORTHROW, .whileInState=&StateMachine::whileWAITFORTHROW },
+    { .onEntry=&StateMachine::enterTHROWING, .whileInState=&StateMachine::whileTHROWING },
+    { .onEntry=&StateMachine::enterINITMEASURED, .whileInState=&StateMachine::whileINITMEASURED },
+    { .onEntry=&StateMachine::enterLOWBATTERY, .whileInState=&StateMachine::whileLOWBATTERY },
+    { .onEntry=&StateMachine::enterCLASSIC_STATE, .whileInState=&StateMachine::whileCLASSIC_STATE },
+    { .onEntry=&StateMachine::enterINITENTANGLED_AB2, .whileInState=&StateMachine::whileINITENTANGLED_AB2 },
+    { .onEntry=&StateMachine::enterINITSINGLE_AFTER_ENT, .whileInState=&StateMachine::whileINITSINGLE_AFTER_ENT }
 };
-
-// Get MAC address for a specific role - use config values
-uint8_t* getMacForRole(Roles role) {
-    switch (role) {
-        case Roles::ROLE_A: return currentConfig.deviceA_mac;
-        case Roles::ROLE_B1: return currentConfig.deviceB1_mac;
-        case Roles::ROLE_B2: return currentConfig.deviceB2_mac;
-        default: return nullptr;
-    }
-}
-
-void printRole(Roles role) {
-    uint8_t macAddress[6];
-    switch (role) {
-        case Roles::ROLE_A: Serial.println("ROLE_A"); break;
-        case Roles::ROLE_B1: Serial.println("ROLE_B1"); break;
-        case Roles::ROLE_B2: Serial.println("ROLE_B2"); break;
-        default: Serial.println("NONE"); break;
-    }
-}
-
-void StateMachine::determineRoles() {
-    uint8_t selfMac[6];
-    EspNowSensor<message>::GetMacAddress(selfMac);
-    roleA = Roles::ROLE_A;
-    roleB1 = Roles::ROLE_B1;
-    roleB2 = Roles::ROLE_B2;
-
-    // Determine own role by comparing with known MACs from config
-    if (memcmp(selfMac, currentConfig.deviceA_mac, 6) == 0) {
-        isDeviceA = true;
-        roleSelf = Roles::ROLE_A;
-        roleSister = Roles::ROLE_B1;
-        roleBrother = Roles::ROLE_B2;
-    } else if (memcmp(selfMac, currentConfig.deviceB1_mac, 6) == 0) {
-        isDeviceB1 = true;
-        roleSelf = Roles::ROLE_B1;
-        roleSister = Roles::ROLE_A;
-        roleBrother = Roles::ROLE_B2;
-    } else if (memcmp(selfMac, currentConfig.deviceB2_mac, 6) == 0) {
-        isDeviceB2 = true;
-        roleSelf = Roles::ROLE_B2;
-        roleSister = Roles::ROLE_B1;
-        roleBrother = Roles::ROLE_A;
-    } else {
-        roleSelf = Roles::NONE;
-        Serial.println("WARNING: This device's MAC address doesn't match any known devices!");
-    }
-
-    // Print the role assignment
-    Serial.print("Self role: ");
-    switch (roleSelf) {
-        case Roles::ROLE_A: Serial.println("ROLE_A"); break;
-        case Roles::ROLE_B1: Serial.println("ROLE_B1"); break;
-        case Roles::ROLE_B2: Serial.println("ROLE_B2"); break;
-        default: Serial.println("NONE"); break;
-    }
-}
 
 void printStateName(const char* objectName, State state) {
     static State previousState = State::IDLE;  // Local static variable to retain its value between function calls
@@ -149,47 +91,43 @@ void printStateName(const char* objectName, State state) {
 
 void StateMachine::sendWatchDog() {
     message watchDog;
-    watchDog.senderRole = roleSelf;
-    watchDog.type = MESSAGE_TYPE_WATCH_DOG;
+    watchDog.type = message_type::MESSAGE_TYPE_WATCH_DOG;
     watchDog.data.watchDog.state = stateSelf;
-    EspNowSensor<message>::Send(watchDog, getMacForRole(roleBrother));
-    EspNowSensor<message>::Send(watchDog, getMacForRole(roleSister));
+    uint8_t target[6];
+    memset(target, 0xFF, 6);
+    EspNowSensor<message>::Send(watchDog, target);
 }
 
-void StateMachine::sendMeasurements(Roles targetRole, State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, MeasuredAxises measureAxis) {
+void StateMachine::sendMeasurements(uint8_t *target, State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, MeasuredAxises measureAxis) {
     message myData;
     debugln("Send Measurements message initated");
-    myData.senderRole = roleSelf;
-    myData.type = MESSAGE_TYPE_MEASUREMENT;
+    myData.type = message_type::MESSAGE_TYPE_MEASUREMENT;
     myData.data.measurement.state = state;
     myData.data.measurement.diceState = diceState;
     myData.data.measurement.measureAxis = measureAxis;
     myData.data.measurement.diceNumber = diceNumber;
     myData.data.measurement.upSide = upSide;
-    EspNowSensor<message>::Send(myData, getMacForRole(targetRole));
+    EspNowSensor<message>::Send(myData, target);
 }
 
-void StateMachine::sendEntangleRequest(Roles targetRole) {
+void StateMachine::sendEntangleRequest(uint8_t *target) {
     message myData;
-    myData.senderRole = roleSelf;
-    myData.type = MESSAGE_TYPE_ENTANGLE_REQUEST;
-    EspNowSensor<message>::Send(myData, getMacForRole(targetRole));
+    myData.type = message_type::MESSAGE_TYPE_ENTANGLE_REQUEST;
+    EspNowSensor<message>::Send(myData, target);
 }
 
-void StateMachine::sendEntanglementConfirm(Roles targetRole) {
+void StateMachine::sendEntanglementConfirm(uint8_t *target) {
     debugln("Send entanglement confirm");
     message myData;
-    myData.senderRole = roleSelf;
-    myData.type = MESSAGE_TYPE_ENTANGLE_CONFIRM;
-    EspNowSensor<message>::Send(myData, getMacForRole(targetRole));
+    myData.type = message_type::MESSAGE_TYPE_ENTANGLE_CONFIRM;
+    EspNowSensor<message>::Send(myData, target);
 }
 
-void StateMachine::sendStopEntanglement(Roles targetRole) {
+void StateMachine::sendStopEntanglement(uint8_t *target) {
     debugln("Send stop Entanglement");
     message myData;
-    myData.senderRole = roleSelf;
-    myData.type = MESSAGE_TYPE_ENTANGLE_STOP;
-    EspNowSensor<message>::Send(myData, getMacForRole(targetRole));
+    myData.type = message_type::MESSAGE_TYPE_ENTANGLE_STOP;
+    EspNowSensor<message>::Send(myData, target);
 }
 
 void setInitialState() {
@@ -203,50 +141,48 @@ void setInitialState() {
 }
 
 const StateTransition StateMachine::stateTransitions[] = {
-    { State::IDLE, Trigger::timed, State::CLASSIC_STATE },
-    { State::CLASSIC_STATE, Trigger::buttonPressed, State::INITSINGLE },
-    { State::INITSINGLE, Trigger::timed, State::WAITFORTHROW },
-    { State::INITSINGLE, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITENTANGLED_AB1, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITENTANGLED_AB1, Trigger::timed, State::WAITFORTHROW },
-    { State::WAITFORTHROW, Trigger::buttonPressed, State::INITSINGLE },
-    { State::WAITFORTHROW, Trigger::closeByAB1, State::INITENTANGLED_AB1 },
-    { State::WAITFORTHROW, Trigger::startRolling, State::THROWING },
-    { State::WAITFORTHROW, Trigger::lowbattery, State::LOWBATTERY },
-    { State::WAITFORTHROW, Trigger::timed, State::INITSINGLE },
-    { State::THROWING, Trigger::nonMoving, State::INITMEASURED },
-    { State::THROWING, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITMEASURED, Trigger::measureXYZ, State::WAITFORTHROW },
-    { State::INITMEASURED, Trigger::measurementFail, State::THROWING },
-    { State::INITMEASURED, Trigger::lowbattery, State::LOWBATTERY },
-    { State::CLASSIC_STATE, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITENTANGLED_AB2, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITENTANGLED_AB2, Trigger::timed, State::WAITFORTHROW },
-    { State::WAITFORTHROW, Trigger::closeByAB2, State::INITENTANGLED_AB2 },
-    { State::INITSINGLE_AFTER_ENT, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITSINGLE_AFTER_ENT, Trigger::timed, State::WAITFORTHROW },
-    { State::WAITFORTHROW, Trigger::entangleStopReceived, State::INITSINGLE_AFTER_ENT }
+    { .currentState=State::IDLE, .trigger=Trigger::timed, .nextState=State::CLASSIC_STATE },
+    { .currentState=State::CLASSIC_STATE, .trigger=Trigger::buttonPressed, .nextState=State::INITSINGLE },
+    { .currentState=State::INITSINGLE, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
+    { .currentState=State::INITSINGLE, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITENTANGLED_AB1, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITENTANGLED_AB1, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::buttonPressed, .nextState=State::INITSINGLE },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::closeByAB1, .nextState=State::INITENTANGLED_AB1 },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::startRolling, .nextState=State::THROWING },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::timed, .nextState=State::INITSINGLE },
+    { .currentState=State::THROWING, .trigger=Trigger::nonMoving, .nextState=State::INITMEASURED },
+    { .currentState=State::THROWING, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITMEASURED, .trigger=Trigger::measureXYZ, .nextState=State::WAITFORTHROW },
+    { .currentState=State::INITMEASURED, .trigger=Trigger::measurementFail, .nextState=State::THROWING },
+    { .currentState=State::INITMEASURED, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::CLASSIC_STATE, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITENTANGLED_AB2, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITENTANGLED_AB2, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::closeByAB2, .nextState=State::INITENTANGLED_AB2 },
+    { .currentState=State::INITSINGLE_AFTER_ENT, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITSINGLE_AFTER_ENT, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::entangleStopReceived, .nextState=State::INITSINGLE_AFTER_ENT }
 };
 
 //declaration of instance
 StateMachine::StateMachine()
     : currentState(State::IDLE), stateEntryTime(0) {
         // Constructor does not call onEntry. That's done in StateMachine::begin()
+        memset(this->current_peer, 0xFF, 6);
+        memset(this->next_peer, 0xFF, 6);
+        memset(last_source, 0xFF, 6);
+        last_rssi = 0;
     }
 
 void StateMachine::begin() {
     // Initialize ESP-NOW with device A MAC from config
-    EspNowSensor<message>::Init(currentConfig.deviceA_mac);
-
-    // Determine roles based on MAC address
-    determineRoles();
-
-    // Check if role was assigned
-    assert(roleSelf != Roles::NONE && "Role cannot be NONE");
+    EspNowSensor<message>::Init();
 
     // Register peers (both sister and brother devices)
-    EspNowSensor<message>::AddPeer(getMacForRole(roleSister));
-    EspNowSensor<message>::AddPeer(getMacForRole(roleBrother));
+    //EspNowSensor<message>::AddPeer(getMacForRole(roleSister));
+    //EspNowSensor<message>::AddPeer(getMacForRole(roleBrother));
 
     Serial.println("ESP-NOW initialized successfully!");
 
@@ -272,43 +208,40 @@ void StateMachine::update() {
     static unsigned long lastUpdateTime = 0;
 
     message data;
+    uint8_t source[6];
+    int32_t current_rssi;
 
-    while (EspNowSensor<message>::Poll(&data)) {
+    while (EspNowSensor<message>::Poll(&data, source, &current_rssi)) {
         switch (data.type) {
-            case MESSAGE_TYPE_WATCH_DOG:  // watch dog, send by all dices
-                stateSister = data.data.watchDog.state;
-                break;
-
-            case MESSAGE_TYPE_MEASUREMENT:  //send by 2 entangled dices to each other  (A <->B1 or A<->B2). Just store the data in the sisterStates
-                debug("measurement data received from ");
-                printRole(data.senderRole);
-                stateSister = data.data.measurement.state;
-                diceStateSister = data.data.measurement.diceState;
-                diceNumberSister = data.data.measurement.diceNumber;
-                measureAxisSister = data.data.measurement.measureAxis;
-                measurementReceived = true;
-                break;
-
-            case MESSAGE_TYPE_ENTANGLE_REQUEST:  //device B1 and/or B2 receives entangle request from A
-                entangleRequestRcvA = true;
-                break;
-
-            case MESSAGE_TYPE_ENTANGLE_CONFIRM:  //device A receives confirmation entangle request
-                debug("entanglement confirmation received from ");
-                printRole(data.senderRole);
-                switch (data.senderRole) {
-                    case Roles::ROLE_B1:
-                        entangleConfirmRcvB1 = true;
-                        break;
-                    case Roles::ROLE_B2:
-                        entangleConfirmRcvB2 = true;
-                        break;
+            case message_type::MESSAGE_TYPE_WATCH_DOG:  // watch dog, send by all dices
+                if (memcmp(source, this->current_peer, 6) == 0) {
+                    stateSister = data.data.watchDog.state;
                 }
                 break;
 
-            case MESSAGE_TYPE_ENTANGLE_STOP:  //device A sends to B1 or B2 direct
+            case message_type::MESSAGE_TYPE_MEASUREMENT:  //send by 2 entangled dices to each other  (A <->B1 or A<->B2). Just store the data in the sisterStates
+                debug("measurement data received from ");
+                if (memcmp(source, this->current_peer, 6) == 0) {
+                    stateSister = data.data.measurement.state;
+                    diceStateSister = data.data.measurement.diceState;
+                    diceNumberSister = data.data.measurement.diceNumber;
+                    measureAxisSister = data.data.measurement.measureAxis;
+                    measurementReceived = true;
+                }
+                break;
+
+            case message_type::MESSAGE_TYPE_ENTANGLE_REQUEST:
+                last_rssi = current_rssi;
+                memcpy(last_source, source, 6);
+                break;
+
+            case message_type::MESSAGE_TYPE_ENTANGLE_CONFIRM:  //device A receives confirmation entangle request
+                debug("entanglement confirmation received from ");
+                this->entangleConfirmRcvB1 = true;
+                break;
+
+            case message_type::MESSAGE_TYPE_ENTANGLE_STOP:  //device A sends to B1 or B2 direct
                 debug("stop entanglement received from: ");
-                printRole(data.senderRole);
                 entangleStopRcv = true;
                 break;
         }
@@ -393,10 +326,13 @@ void StateMachine::enterINITENTANGLED_AB1() {
     stateSelf = currentState;
 
     //before changing the entangled states, send the currentstate of B1 to B2
-    if (roleSelf == Roles::ROLE_B1) {
-        debugln("B1 sends measurement data to B2");
+    uint8_t empty[6];
+    memset(empty, 0xFF, 6);
+    if (memcmp(this->current_peer, empty, 6) != 0) {
+        debugln("End entanglement");
         delay(100);
-        sendMeasurements(roleB2, stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, measureAxisSelf);
+        sendStopEntanglement(this->current_peer);
+        memcpy(this->current_peer, empty, 6);
     }
 
     //reset all states
@@ -409,21 +345,10 @@ void StateMachine::enterINITENTANGLED_AB1() {
     prevUpSideSelf = UpSide::NONE;
 
     //and send them to the oponent dice
-    if (roleSelf == Roles::ROLE_A) {
-        debugln("A send measurement to B1");
-        sendMeasurements(roleB1, stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, measureAxisSelf);
-    } else if (roleSelf == Roles::ROLE_B1) {
-        debugln("B1 send measurement to A");
-        sendMeasurements(roleA, stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, measureAxisSelf);
-    }
-
-    //now kill the other entanglement
-    if (prevDiceStateSelf == DiceStates::ENTANGLED_AB2) {  //only for A
-                                                           //and stop the entanglement AB2 by A
-        if (roleSelf == roleA) {
-            sendStopEntanglement(roleB2);
-        }
-    }
+    memcpy(this->current_peer, this->next_peer, 6);
+    memcpy(this->next_peer, empty, 6);
+    debugln("A send measurement to B1");
+    sendMeasurements(this->current_peer, stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, measureAxisSelf);
 
     refreshScreens();
     sendWatchDog();
@@ -451,12 +376,6 @@ void StateMachine::enterINITENTANGLED_AB2() {
     stateSelf = currentState;
     delay(100);
 
-    //before changing the entangled states, send the currentstate of B1 to B2
-    if (roleSelf == Roles::ROLE_B2) {
-        debugln("B2 sends measurement data to B1");
-        delay(100);
-        sendMeasurements(roleB1, stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, measureAxisSelf);
-    }
     //set all states
     prevDiceStateSelf = diceStateSelf;  //store for the future
     diceStateSelf = DiceStates::ENTANGLED_AB2;
@@ -465,24 +384,6 @@ void StateMachine::enterINITENTANGLED_AB2() {
     measureAxisSelf = MeasuredAxises::UNDEFINED;
     prevMeasureAxisSelf = MeasuredAxises::UNDEFINED;
     prevUpSideSelf = UpSide::NONE;
-
-    //and send them to the oponent dice
-    if (roleSelf == Roles::ROLE_A) {
-        debugln("A send measurement to B2");
-        sendMeasurements(roleB2, stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, measureAxisSelf);
-        delay(100);
-    } else if (roleSelf == Roles::ROLE_B2) {
-        debugln("B2 send measurement to A");
-        sendMeasurements(roleA, stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, measureAxisSelf);
-        delay(100);
-    }
-    //now kill the other entanglement
-    if (prevDiceStateSelf == DiceStates::ENTANGLED_AB1) {  //only for A
-                                                           //and stop the entanglement AB2 by A
-        if (roleSelf == roleA) {
-            sendStopEntanglement(roleB1);
-        }
-    }
 
     refreshScreens();
     sendWatchDog();
@@ -567,46 +468,22 @@ void StateMachine::whileWAITFORTHROW() {
     } else if (entangleStopRcv) {  //quit the entanglement
         entangleStopRcv = false;
         changeState(Trigger::entangleStopReceived);
-    }
-    //diceA initiates entanglement request, only to dice not entangled to
-    if (roleSelf == Roles::ROLE_A) {
-        if (diceStateSelf != DiceStates::ENTANGLED_AB1) {  //SINGLE or ENTANGLED_AB2
-                                                           // Broadcast pairing request periodically
-            if (millis() - lastBroadcastTimeB1 > 500) {
-                sendEntangleRequest(roleB1);
-                lastBroadcastTimeB1 = millis();
-            }
-            if (entangleConfirmRcvB1) {
-                entangleConfirmRcvB1 = false;
-                changeState(Trigger::closeByAB1);
-            }
-        }
-
-        if (diceStateSelf != DiceStates::ENTANGLED_AB2) {  //SINGLE or ENTANGLED_AB1
-                                                           // Broadcast pairing request periodically
-            if (millis() - lastBroadcastTimeB2 > 500) {
-                sendEntangleRequest(roleB2);
-                lastBroadcastTimeB2 = millis();
-            }
-            if (entangleConfirmRcvB2) {
-                entangleConfirmRcvB2 = false;
-                changeState(Trigger::closeByAB2);
-            }
-        }
-
-        // and dice B1 and B2 respond to that
-    } else if (roleSelf == Roles::ROLE_B1) {
-        if (entangleRequestRcvA && EspNowSensor<message>::IsCloseBy()) {
-            sendEntanglementConfirm(Roles::ROLE_A);
-            entangleRequestRcvA = false;
-            changeState(Trigger::closeByAB1);
-        }
-    } else if (roleSelf == Roles::ROLE_B2) {
-        if (entangleRequestRcvA && EspNowSensor<message>::IsCloseBy()) {
-            sendEntanglementConfirm(Roles::ROLE_A);
-            entangleRequestRcvA = false;
-            changeState(Trigger::closeByAB2);
-        }
+    } else if (entangleConfirmRcvB1) {
+        memcpy(this->next_peer, last_source, 6);
+        EspNowSensor<message>::AddPeer(this->next_peer);
+        entangleConfirmRcvB1 = false;
+        changeState(Trigger::closeByAB1);
+    } else if (last_rssi > currentConfig.rssiLimit && last_rssi < -1 && memcmp(last_source, this->current_peer, 6) != 0) {
+        memcpy(this->next_peer, last_source, 6);
+        EspNowSensor<message>::AddPeer(this->next_peer);
+        sendEntanglementConfirm(last_source);
+        last_rssi = 0;
+        changeState(Trigger::closeByAB1);
+    } else if (millis() - lastBroadcastTimeB1 > 500) {
+        uint8_t target[8];
+        memset(target, 0xFF, 6);
+        sendEntangleRequest(target);
+        lastBroadcastTimeB1 = millis();
     }
 
     //timeout of entangled state. No rolling during a period, so return to initSingle state
@@ -641,19 +518,19 @@ void StateMachine::whileTHROWING() {
     } else if (_imuSensor->stable() && _imuSensor->on_table()) {
         //  } else if (_imuSensor->isNotMoving() && (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND))) {
         debugln("stable and on table triggered");
-    changeState(Trigger::nonMoving);
-}
-//when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
-if (measurementReceived) {
-    measurementReceived = false;
-    prevDiceStateSelf = diceStateSelf;  //store for the future
-    if (diceStateSelf == DiceStates::ENTANGLED_AB1) {
-        diceStateSelf = DiceStates::UN_ENTANGLED_AB1;
-    } else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
-        diceStateSelf = DiceStates::UN_ENTANGLED_AB2;
+        changeState(Trigger::nonMoving);
     }
-    refreshScreens();  //update screens ackordingly
-}
+    //when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
+    if (measurementReceived) {
+        measurementReceived = false;
+        prevDiceStateSelf = diceStateSelf;  //store for the future
+        if (diceStateSelf == DiceStates::ENTANGLED_AB1) {
+            diceStateSelf = DiceStates::UN_ENTANGLED_AB1;
+        } else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
+            diceStateSelf = DiceStates::UN_ENTANGLED_AB2;
+        }
+        refreshScreens();  //update screens ackordingly
+    }
 };
 
 void StateMachine::enterINITMEASURED() {
@@ -717,75 +594,6 @@ void StateMachine::enterINITMEASURED() {
             return;                                 // Stay in current state
     }
 
-
-    /*
-    // Detection algorithm: set measureAxis and which side up?
-    // Use isNano from config instead of compile-time define
-    if (currentConfig.isNano) {
-    // IMU mounted on X+ side (left) - NANO configuration
-    if (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::ZAXIS;");
-    measureAxisSelf = MeasuredAxises::ZAXIS;
-    if (_imuSensor->getXGravity() < 0) upSideSelf = UpSide::Z1;
-    else upSideSelf = UpSide::Z0;
-    } else if (withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::XAXIS;");
-    measureAxisSelf = MeasuredAxises::XAXIS;
-    if (_imuSensor->getYGravity() < 0) upSideSelf = UpSide::X0;
-    else upSideSelf = UpSide::X1;
-    } else if (withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::YAXIS;");
-    measureAxisSelf = MeasuredAxises::YAXIS;
-    if (_imuSensor->getZGravity() < 0) upSideSelf = UpSide::Y0;
-    else upSideSelf = UpSide::Y1;
-    } else {
-    debugln("no clear axis");
-    changeState(Trigger::measurementFail);  //back to throwing state
-    }
-    } else {
-    // IMU mounted on Y- side (rear) - DEVKIT configuration
-    if (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::ZAXIS;");
-    measureAxisSelf = MeasuredAxises::ZAXIS;
-    if (_imuSensor->getXGravity() > 0) upSideSelf = UpSide::Z0;
-    else upSideSelf = UpSide::Z1;
-    } else if (withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::YAXIS;");
-    measureAxisSelf = MeasuredAxises::YAXIS;
-    if (_imuSensor->getYGravity() > 0) upSideSelf = UpSide::Y1;
-    else upSideSelf = UpSide::Y0;
-    } else if (withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::XAXIS;");
-    measureAxisSelf = MeasuredAxises::XAXIS;
-    if (_imuSensor->getZGravity() > 0) upSideSelf = UpSide::X0;
-    else upSideSelf = UpSide::X1;
-    } else {
-    debugln("no clear axis");
-    changeState(Trigger::measurementFail);  //back to throwing state
-    }
-    }
-
-    switch (upSideSelf) {
-    case UpSide::X0:
-    debugln("upside X0");
-    break;
-    case UpSide::X1:
-    debugln("upside X1");
-    break;
-    case UpSide::Y0:
-    debugln("upside Y0");
-    break;
-    case UpSide::Y1:
-    debugln("upside Y1");
-    break;
-    case UpSide::Z0:
-    debugln("upside Z0");
-    break;
-    case UpSide::Z1:
-    debugln("upside Z1");
-    break;
-    }
-    */
     // The secret sauce to set diceNumber on top
     switch (diceStateSelf) {
         case DiceStates::SINGLE:
@@ -821,8 +629,8 @@ void StateMachine::enterINITMEASURED() {
                     debugln((measureAxisSelf == measureAxisSister) ? "sister ready. same axis" : "different axis");
                 }
                 // Send measurements to the opponent dice
-                Roles targetRole = (roleSelf == Roles::ROLE_A) ? roleB1 : roleA;
-                sendMeasurements(targetRole, stateSelf, DiceStates::MEASURED, diceNumberSelf, upSideSelf, measureAxisSelf);
+                sendMeasurements(this->current_peer, stateSelf, DiceStates::MEASURED, diceNumberSelf, upSideSelf, measureAxisSelf);
+                memset(this->current_peer, 0, 6);
                 break;
             }
 
@@ -842,9 +650,6 @@ void StateMachine::enterINITMEASURED() {
                         : selectOneToSix();
                     debugln((measureAxisSelf == measureAxisSister) ? "sister ready. same axis" : "different axis");
                 }
-                // Send measurements to the opponent dice
-                Roles targetRole = (roleSelf == Roles::ROLE_A) ? roleB2 : roleA;
-                sendMeasurements(targetRole, stateSelf, DiceStates::MEASURED, diceNumberSelf, upSideSelf, measureAxisSelf);
                 break;
             }
 

@@ -1,11 +1,11 @@
-finclude "Arduino.h"
-#include "defines.h"
-#include "IMUhelpers.h"
-#include "handyHelpers.h"
-#include "Screenfunctions.h"
-#include "ScreenDeterminator.h"  //TruthTable to select screens from various states
-                                 //#include "StateMachine.h"
-#include "ScreenStateDefs.h"
+#include <Arduino.h>
+#include "defines.hpp"
+#include "IMUhelpers.hpp"
+#include "handyHelpers.hpp"
+#include "Screenfunctions.hpp"
+#include "ScreenDeterminator.hpp"  //TruthTable to select screens from various states
+                                 //#include "StateMachine.hpp"
+#include "ScreenStateDefs.hpp"
 
 State stateSelf, stateSister;  //state is used for TruthTable. Is copy of currenState.
 DiceStates diceStateSelf, prevDiceStateSelf, diceStateSister;
@@ -292,6 +292,7 @@ DiceNumbers selectOneToSix() {
             return DiceNumbers::SIX;
             break;
     }
+    return DiceNumbers::ONE;
 }
 DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop) {
     debugln("select opposite number");
@@ -315,4 +316,5 @@ DiceNumbers selectOppositeOneToSix(DiceNumbers diceNumberTop) {
             return DiceNumbers::ONE;
             break;
     }
+    return DiceNumbers::ONE;
 }

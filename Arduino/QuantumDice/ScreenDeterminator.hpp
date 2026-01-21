@@ -2,7 +2,7 @@
 #define SCREENDETERMINATOR_H_
 
 /// TruthTable to select screens from various states
-#include "ScreenStateDefs.h"
+#include "ScreenStateDefs.hpp"
 
 TruthTableEntry truthTable[] = {
   {

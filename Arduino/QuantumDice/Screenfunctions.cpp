@@ -1,14 +1,13 @@
-#include "Screenfunctions.h"
+#include "Screenfunctions.hpp"
 
-#include "Adafruit_GC9A01A.h"
-#include "Arduino.h"
-#include "defines.h"
-#include "Globals.h"
-#include "handyHelpers.h"
-#include "ImageLibrary/ImageLibrary.h"
-#include "IMUhelpers.h"
-#include "ScreenStateDefs.h"
-#include "Version.h"
+#include <Adafruit_GC9A01A.h>
+#include <Arduino.h>
+
+#include "defines.hpp"
+#include "Globals.hpp"
+#include "handyHelpers.hpp"
+#include "ImageLibrary/ImageLibrary.hpp"
+#include "ScreenStateDefs.hpp"
 
 // Global TFT object - will be initialized dynamically
 Adafruit_GC9A01A tft(-1, -1, -1); // Temporary pins, will be reinitialized
