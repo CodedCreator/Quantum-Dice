@@ -1,7 +1,8 @@
-#include "Arduino.h"
-#include "defines.h"
-#include "IMUhelpers.h"
-#include "handyHelpers.h"
+#include <Arduino.h>
+
+#include "defines.hpp"
+#include "IMUhelpers.hpp"
+#include "handyHelpers.hpp"
 
 // Define global configuration object
 DiceConfig currentConfig;

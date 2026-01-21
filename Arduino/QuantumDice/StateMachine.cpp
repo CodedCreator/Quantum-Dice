@@ -1,20 +1,20 @@
-#include "defines.h"
-#include "ScreenStateDefs.h"
-#include "handyHelpers.h"
-#include "IMUhelpers.h"
-#include "Screenfunctions.h"
-#include "StateMachine.h"
-#include "EspNowSensor.h"
+#include "defines.hpp"
+#include "ScreenStateDefs.hpp"
+#include "handyHelpers.hpp"
+#include "IMUhelpers.hpp"
+#include "Screenfunctions.hpp"
+#include "StateMachine.hpp"
+#include "EspNowSensor.hpp"
 
-typedef enum _message_type {
+using message_type = enum message_type: uint8_t {
     MESSAGE_TYPE_WATCH_DOG,
     MESSAGE_TYPE_MEASUREMENT,
     MESSAGE_TYPE_ENTANGLE_REQUEST,
     MESSAGE_TYPE_ENTANGLE_CONFIRM,
     MESSAGE_TYPE_ENTANGLE_STOP
-} message_type;
+};
 
-typedef struct _message {
+using message = struct message {
     message_type type;
     union _data {
         struct _watchDogData {
@@ -28,23 +28,23 @@ typedef struct _message {
             UpSide upSide;
         } measurement;
     } data;
-} message;
+};
 
 static uint8_t last_source[6];
 static int32_t last_rssi = 0;
 
 //definitions of functions related to states
 const StateMachine::StateFunctions StateMachine::stateFunctions[] = {
-    { &StateMachine::enterIDLE, &StateMachine::whileIDLE },
-    { &StateMachine::enterINITSINGLE, &StateMachine::whileINITSINGLE },
-    { &StateMachine::enterINITENTANGLED_AB1, &StateMachine::whileINITENTANGLED_AB1 },
-    { &StateMachine::enterWAITFORTHROW, &StateMachine::whileWAITFORTHROW },
-    { &StateMachine::enterTHROWING, &StateMachine::whileTHROWING },
-    { &StateMachine::enterINITMEASURED, &StateMachine::whileINITMEASURED },
-    { &StateMachine::enterLOWBATTERY, &StateMachine::whileLOWBATTERY },
-    { &StateMachine::enterCLASSIC_STATE, &StateMachine::whileCLASSIC_STATE },
-    { &StateMachine::enterINITENTANGLED_AB2, &StateMachine::whileINITENTANGLED_AB2 },
-    { &StateMachine::enterINITSINGLE_AFTER_ENT, &StateMachine::whileINITSINGLE_AFTER_ENT }
+    { .onEntry=&StateMachine::enterIDLE, .whileInState=&StateMachine::whileIDLE },
+    { .onEntry=&StateMachine::enterINITSINGLE, .whileInState=&StateMachine::whileINITSINGLE },
+    { .onEntry=&StateMachine::enterINITENTANGLED_AB1, .whileInState=&StateMachine::whileINITENTANGLED_AB1 },
+    { .onEntry=&StateMachine::enterWAITFORTHROW, .whileInState=&StateMachine::whileWAITFORTHROW },
+    { .onEntry=&StateMachine::enterTHROWING, .whileInState=&StateMachine::whileTHROWING },
+    { .onEntry=&StateMachine::enterINITMEASURED, .whileInState=&StateMachine::whileINITMEASURED },
+    { .onEntry=&StateMachine::enterLOWBATTERY, .whileInState=&StateMachine::whileLOWBATTERY },
+    { .onEntry=&StateMachine::enterCLASSIC_STATE, .whileInState=&StateMachine::whileCLASSIC_STATE },
+    { .onEntry=&StateMachine::enterINITENTANGLED_AB2, .whileInState=&StateMachine::whileINITENTANGLED_AB2 },
+    { .onEntry=&StateMachine::enterINITSINGLE_AFTER_ENT, .whileInState=&StateMachine::whileINITSINGLE_AFTER_ENT }
 };
 
 void printStateName(const char* objectName, State state) {
@@ -141,29 +141,29 @@ void setInitialState() {
 }
 
 const StateTransition StateMachine::stateTransitions[] = {
-    { State::IDLE, Trigger::timed, State::CLASSIC_STATE },
-    { State::CLASSIC_STATE, Trigger::buttonPressed, State::INITSINGLE },
-    { State::INITSINGLE, Trigger::timed, State::WAITFORTHROW },
-    { State::INITSINGLE, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITENTANGLED_AB1, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITENTANGLED_AB1, Trigger::timed, State::WAITFORTHROW },
-    { State::WAITFORTHROW, Trigger::buttonPressed, State::INITSINGLE },
-    { State::WAITFORTHROW, Trigger::closeByAB1, State::INITENTANGLED_AB1 },
-    { State::WAITFORTHROW, Trigger::startRolling, State::THROWING },
-    { State::WAITFORTHROW, Trigger::lowbattery, State::LOWBATTERY },
-    { State::WAITFORTHROW, Trigger::timed, State::INITSINGLE },
-    { State::THROWING, Trigger::nonMoving, State::INITMEASURED },
-    { State::THROWING, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITMEASURED, Trigger::measureXYZ, State::WAITFORTHROW },
-    { State::INITMEASURED, Trigger::measurementFail, State::THROWING },
-    { State::INITMEASURED, Trigger::lowbattery, State::LOWBATTERY },
-    { State::CLASSIC_STATE, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITENTANGLED_AB2, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITENTANGLED_AB2, Trigger::timed, State::WAITFORTHROW },
-    { State::WAITFORTHROW, Trigger::closeByAB2, State::INITENTANGLED_AB2 },
-    { State::INITSINGLE_AFTER_ENT, Trigger::lowbattery, State::LOWBATTERY },
-    { State::INITSINGLE_AFTER_ENT, Trigger::timed, State::WAITFORTHROW },
-    { State::WAITFORTHROW, Trigger::entangleStopReceived, State::INITSINGLE_AFTER_ENT }
+    { .currentState=State::IDLE, .trigger=Trigger::timed, .nextState=State::CLASSIC_STATE },
+    { .currentState=State::CLASSIC_STATE, .trigger=Trigger::buttonPressed, .nextState=State::INITSINGLE },
+    { .currentState=State::INITSINGLE, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
+    { .currentState=State::INITSINGLE, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITENTANGLED_AB1, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITENTANGLED_AB1, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::buttonPressed, .nextState=State::INITSINGLE },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::closeByAB1, .nextState=State::INITENTANGLED_AB1 },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::startRolling, .nextState=State::THROWING },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::timed, .nextState=State::INITSINGLE },
+    { .currentState=State::THROWING, .trigger=Trigger::nonMoving, .nextState=State::INITMEASURED },
+    { .currentState=State::THROWING, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITMEASURED, .trigger=Trigger::measureXYZ, .nextState=State::WAITFORTHROW },
+    { .currentState=State::INITMEASURED, .trigger=Trigger::measurementFail, .nextState=State::THROWING },
+    { .currentState=State::INITMEASURED, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::CLASSIC_STATE, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITENTANGLED_AB2, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITENTANGLED_AB2, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::closeByAB2, .nextState=State::INITENTANGLED_AB2 },
+    { .currentState=State::INITSINGLE_AFTER_ENT, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
+    { .currentState=State::INITSINGLE_AFTER_ENT, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
+    { .currentState=State::WAITFORTHROW, .trigger=Trigger::entangleStopReceived, .nextState=State::INITSINGLE_AFTER_ENT }
 };
 
 //declaration of instance
@@ -594,75 +594,6 @@ void StateMachine::enterINITMEASURED() {
             return;                                 // Stay in current state
     }
 
-
-    /*
-    // Detection algorithm: set measureAxis and which side up?
-    // Use isNano from config instead of compile-time define
-    if (currentConfig.isNano) {
-    // IMU mounted on X+ side (left) - NANO configuration
-    if (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::ZAXIS;");
-    measureAxisSelf = MeasuredAxises::ZAXIS;
-    if (_imuSensor->getXGravity() < 0) upSideSelf = UpSide::Z1;
-    else upSideSelf = UpSide::Z0;
-    } else if (withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::XAXIS;");
-    measureAxisSelf = MeasuredAxises::XAXIS;
-    if (_imuSensor->getYGravity() < 0) upSideSelf = UpSide::X0;
-    else upSideSelf = UpSide::X1;
-    } else if (withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::YAXIS;");
-    measureAxisSelf = MeasuredAxises::YAXIS;
-    if (_imuSensor->getZGravity() < 0) upSideSelf = UpSide::Y0;
-    else upSideSelf = UpSide::Y1;
-    } else {
-    debugln("no clear axis");
-    changeState(Trigger::measurementFail);  //back to throwing state
-    }
-    } else {
-    // IMU mounted on Y- side (rear) - DEVKIT configuration
-    if (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::ZAXIS;");
-    measureAxisSelf = MeasuredAxises::ZAXIS;
-    if (_imuSensor->getXGravity() > 0) upSideSelf = UpSide::Z0;
-    else upSideSelf = UpSide::Z1;
-    } else if (withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::YAXIS;");
-    measureAxisSelf = MeasuredAxises::YAXIS;
-    if (_imuSensor->getYGravity() > 0) upSideSelf = UpSide::Y1;
-    else upSideSelf = UpSide::Y0;
-    } else if (withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND)) {
-    debugln("measureAxisSelf = MeasuredAxises::XAXIS;");
-    measureAxisSelf = MeasuredAxises::XAXIS;
-    if (_imuSensor->getZGravity() > 0) upSideSelf = UpSide::X0;
-    else upSideSelf = UpSide::X1;
-    } else {
-    debugln("no clear axis");
-    changeState(Trigger::measurementFail);  //back to throwing state
-    }
-    }
-
-    switch (upSideSelf) {
-    case UpSide::X0:
-    debugln("upside X0");
-    break;
-    case UpSide::X1:
-    debugln("upside X1");
-    break;
-    case UpSide::Y0:
-    debugln("upside Y0");
-    break;
-    case UpSide::Y1:
-    debugln("upside Y1");
-    break;
-    case UpSide::Z0:
-    debugln("upside Z0");
-    break;
-    case UpSide::Z1:
-    debugln("upside Z1");
-    break;
-    }
-    */
     // The secret sauce to set diceNumber on top
     switch (diceStateSelf) {
         case DiceStates::SINGLE:

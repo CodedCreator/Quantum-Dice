@@ -1,7 +1,7 @@
 #ifndef HANDYHELPERS_H_
 #define HANDYHELPERS_H_
 
-#include "IMUhelpers.h"
+#include "IMUhelpers.hpp"
 #include <Button2.h>
 #include <EEPROM.h>
 #include <sys/_stdint.h>

@@ -2,7 +2,7 @@
    IMUhelpers.cpp - Implementation of polymorphic IMU sensor interface
    */
 
-#include "IMUhelpers.h"
+#include "IMUhelpers.hpp"
 
 // ============================================
 // BNO055IMUSensor IMPLEMENTATION
