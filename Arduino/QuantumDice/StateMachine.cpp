@@ -1,113 +1,147 @@
+#include "StateMachine.hpp"
+
 #include "defines.hpp"
-#include "ScreenStateDefs.hpp"
+#include "DiceConfigManager.hpp"
+#include "EspNowSensor.hpp"
 #include "handyHelpers.hpp"
 #include "IMUhelpers.hpp"
 #include "Screenfunctions.hpp"
-#include "StateMachine.hpp"
-#include "EspNowSensor.hpp"
-#include "DiceConfigManager.hpp"
+#include "ScreenStateDefs.hpp"
 
-using message_type = enum message_type: uint8_t {
+#include <map>
+
+using message_type = enum message_type : uint8_t {
     MESSAGE_TYPE_WATCH_DOG,
-        MESSAGE_TYPE_MEASUREMENT,
-        MESSAGE_TYPE_ENTANGLE_REQUEST,
-        MESSAGE_TYPE_ENTANGLE_CONFIRM,
-        MESSAGE_TYPE_ENTANGLE_STOP
+    MESSAGE_TYPE_MEASUREMENT,
+    MESSAGE_TYPE_ENTANGLE_REQUEST,
+    MESSAGE_TYPE_ENTANGLE_CONFIRM,
+    MESSAGE_TYPE_ENTANGLE_STOP
 };
 
 using message = struct message {
     message_type type;
+
     union _data {
         struct _watchDogData {
             State state;
         } watchDog;
+
         struct _measurementData {
-            State state;
-            DiceStates diceState;
+            State          state;
             MeasuredAxises measureAxis;
-            DiceNumbers diceNumber;
-            UpSide upSide;
+            DiceNumbers    diceNumber;
+            UpSide         upSide;
         } measurement;
     } data;
 };
 
 static uint8_t last_source[6];
-static int32_t last_rssi = 0;
+static int32_t last_rssi = INT32_MIN;
 
-//definitions of functions related to states
-const StateMachine::StateFunctions StateMachine::stateFunctions[] = {
-    { .onEntry=&StateMachine::enterIDLE, .whileInState=&StateMachine::whileIDLE },
-    { .onEntry=&StateMachine::enterINITSINGLE, .whileInState=&StateMachine::whileINITSINGLE },
-    { .onEntry=&StateMachine::enterINITENTANGLED_AB1, .whileInState=&StateMachine::whileINITENTANGLED_AB1 },
-    { .onEntry=&StateMachine::enterWAITFORTHROW, .whileInState=&StateMachine::whileWAITFORTHROW },
-    { .onEntry=&StateMachine::enterTHROWING, .whileInState=&StateMachine::whileTHROWING },
-    { .onEntry=&StateMachine::enterINITMEASURED, .whileInState=&StateMachine::whileINITMEASURED },
-    { .onEntry=&StateMachine::enterLOWBATTERY, .whileInState=&StateMachine::whileLOWBATTERY },
-    { .onEntry=&StateMachine::enterCLASSIC_STATE, .whileInState=&StateMachine::whileCLASSIC_STATE },
-    { .onEntry=&StateMachine::enterINITENTANGLED_AB2, .whileInState=&StateMachine::whileINITENTANGLED_AB2 },
-    { .onEntry=&StateMachine::enterINITSINGLE_AFTER_ENT, .whileInState=&StateMachine::whileINITSINGLE_AFTER_ENT }
+// State function mappings for the quantum dice system
+// Maps each state combination to its enter and while functions
+const std::map<State, StateMachine::StateFunction> StateMachine::stateFunctions = {
+  // === CLASSIC MODE ===
+  {State{Mode::CLASSIC, ThrowState::IDLE, EntanglementState::PURE},
+   {&StateMachine::enterClassicIdle, &StateMachine::whileClassicIdle}},
+
+  // === QUANTUM MODE - IDLE ===
+  // Pure quantum state (no entanglement)
+  {State{Mode::QUANTUM, ThrowState::IDLE, EntanglementState::PURE},
+   {&StateMachine::enterQuantumIdle, &StateMachine::whileQuantumIdle}},
+
+  // Entanglement requested (waiting for partner confirmation)
+  {State{Mode::QUANTUM, ThrowState::IDLE, EntanglementState::ENTANGLE_REQUESTED},
+   {&StateMachine::enterQuantumIdle, &StateMachine::whileQuantumIdle}},
+
+  // Entangled with partner
+  {State{Mode::QUANTUM, ThrowState::IDLE, EntanglementState::ENTANGLED},
+   {&StateMachine::enterQuantumIdle, &StateMachine::whileQuantumIdle}},
+
+  // Post-entanglement (partner has measured, waiting for our measurement)
+  {State{Mode::QUANTUM, ThrowState::IDLE, EntanglementState::POST_ENTANGLEMENT},
+   {&StateMachine::enterQuantumIdle, &StateMachine::whileQuantumIdle}},
+
+  // === QUANTUM MODE - THROWING ===
+  {State{Mode::QUANTUM, ThrowState::THROWING, EntanglementState::PURE},
+   {&StateMachine::enterThrowing, &StateMachine::whileThrowing}      },
+  {State{Mode::QUANTUM, ThrowState::THROWING, EntanglementState::ENTANGLE_REQUESTED},
+   {&StateMachine::enterThrowing, &StateMachine::whileThrowing}      },
+  {State{Mode::QUANTUM, ThrowState::THROWING, EntanglementState::ENTANGLED},
+   {&StateMachine::enterThrowing, &StateMachine::whileThrowing}      },
+  {State{Mode::QUANTUM, ThrowState::THROWING, EntanglementState::POST_ENTANGLEMENT},
+   {&StateMachine::enterThrowing, &StateMachine::whileThrowing}      },
+
+  // === QUANTUM MODE - OBSERVED ===
+  {State{Mode::QUANTUM, ThrowState::OBSERVED, EntanglementState::PURE},
+   {&StateMachine::enterObserved, &StateMachine::whileObserved}      },
+  {State{Mode::QUANTUM, ThrowState::OBSERVED, EntanglementState::ENTANGLE_REQUESTED},
+   {&StateMachine::enterObserved, &StateMachine::whileObserved}      },
+  {State{Mode::QUANTUM, ThrowState::OBSERVED, EntanglementState::ENTANGLED},
+   {&StateMachine::enterObserved, &StateMachine::whileObserved}      },
+  {State{Mode::QUANTUM, ThrowState::OBSERVED, EntanglementState::POST_ENTANGLEMENT},
+   {&StateMachine::enterObserved, &StateMachine::whileObserved}      },
 };
 
-void printStateName(const char* objectName, State state) {
-    static State previousState = State::IDLE;  // Local static variable to retain its value between function calls
-
-    if (state != previousState) {
-        debug(objectName);
-        debug(": ");
-        switch (state) {
-            case State::IDLE:
-                debugln("IDLE");
-                break;
-            case State::INITSINGLE:
-                debugln("INITSINGLE");
-                break;
-            case State::INITENTANGLED_AB1:
-                debugln("INITENTANGLED_AB1");
-                break;
-            case State::INITENTANGLED_AB2:
-                debugln("INITENTANGLED_AB2");
-                break;
-            case State::INITSINGLE_AFTER_ENT:
-                debugln("INITSINGLE_AFTER_ENT");
-                break;
-            case State::WAITFORTHROW:
-                debugln("WAITFORTHROW");
-                break;
-            case State::THROWING:
-                debugln("THROWING");
-                break;
-            case State::INITMEASURED:
-                debugln("INITMEASURED");
-                break;
-            case State::LOWBATTERY:
-                debugln("LOWBATTERY");
-                break;
-            case State::CLASSIC_STATE:
-                debugln("CLASSIC_STATE");
-                break;
+namespace {
+    inline auto getModeName(Mode mode) -> char * {
+        switch (mode) {
+            case Mode::CLASSIC: return "CLASSIC";
+            case Mode::QUANTUM: return "QUANTUM";
+            default:            return "UNKNOWN";
         }
-        previousState = state;  // Update previousState
     }
+
+    inline auto getThrowStateName(ThrowState throwState) -> char * {
+        switch (throwState) {
+            case ThrowState::IDLE:     return "IDLE";
+            case ThrowState::THROWING: return "THROWING";
+            case ThrowState::OBSERVED: return "OBSERVED";
+            default:                   return "UNKNOWN";
+        }
+    }
+
+    inline auto getEntanglementStateName(EntanglementState entanglementState) -> char * {
+        switch (entanglementState) {
+            case EntanglementState::PURE:               return "PURE";
+            case EntanglementState::ENTANGLE_REQUESTED: return "ENTANGLE_REQUESTED";
+            case EntanglementState::ENTANGLED:          return "ENTANGLED";
+            case EntanglementState::POST_ENTANGLEMENT:  return "POST_ENTANGLEMENT";
+            default:                                    return "UNKNOWN";
+        }
+    }
+
+    inline auto getStateName(State state) -> char * {
+        static char stateName[100];
+        snprintf(stateName, sizeof(stateName), "%s | %s | %s", getModeName(state.mode),
+                 getThrowStateName(state.throwState),
+                 getEntanglementStateName(state.entanglementState));
+        return stateName;
+    }
+}
+
+void printStateName(const char *objectName, State state) {
+    debugf("%s: %s\n", objectName, getStateName(state));
 }
 
 void StateMachine::sendWatchDog() {
     message watchDog;
-    watchDog.type = message_type::MESSAGE_TYPE_WATCH_DOG;
+    watchDog.type                = message_type::MESSAGE_TYPE_WATCH_DOG;
     watchDog.data.watchDog.state = stateSelf;
     uint8_t target[6];
-    memset(target, 0xFF, 6);
-    EspNowSensor<message>::Send(watchDog, target);
+    memset((uint8_t *)target, 0xFF, 6);
+    EspNowSensor<message>::Send(watchDog, (uint8_t *)target);
 }
 
-void StateMachine::sendMeasurements(uint8_t *target, State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, MeasuredAxises measureAxis) {
+void StateMachine::sendMeasurements(uint8_t *target, State state, DiceNumbers diceNumber,
+                                    UpSide upSide, MeasuredAxises measureAxis) {
     message myData;
     debugln("Send Measurements message initated");
-    myData.type = message_type::MESSAGE_TYPE_MEASUREMENT;
-    myData.data.measurement.state = state;
-    myData.data.measurement.diceState = diceState;
+    myData.type                         = message_type::MESSAGE_TYPE_MEASUREMENT;
+    myData.data.measurement.state       = state;
     myData.data.measurement.measureAxis = measureAxis;
-    myData.data.measurement.diceNumber = diceNumber;
-    myData.data.measurement.upSide = upSide;
+    myData.data.measurement.diceNumber  = diceNumber;
+    myData.data.measurement.upSide      = upSide;
     EspNowSensor<message>::Send(myData, target);
 }
 
@@ -132,590 +166,642 @@ void StateMachine::sendStopEntanglement(uint8_t *target) {
 }
 
 void setInitialState() {
-    diceStateSelf = DiceStates::SINGLE;
-    prevDiceStateSelf = DiceStates::NONE;
-    measureAxisSelf = MeasuredAxises::UNDEFINED;
+    // Initialize measurement-related state
+    measureAxisSelf     = MeasuredAxises::UNDEFINED;
     prevMeasureAxisSelf = MeasuredAxises::UNDEFINED;
-    diceNumberSelf = DiceNumbers::NONE;
-    upSideSelf = UpSide::NONE;
-    prevUpSideSelf = UpSide::NONE;
+    diceNumberSelf      = DiceNumbers::NONE;
+    upSideSelf          = UpSide::NONE;
+    prevUpSideSelf      = UpSide::NONE;
 }
 
-const StateTransition StateMachine::stateTransitions[] = {
-    { .currentState=State::IDLE, .trigger=Trigger::timed, .nextState=State::CLASSIC_STATE },
-    { .currentState=State::CLASSIC_STATE, .trigger=Trigger::buttonPressed, .nextState=State::INITSINGLE },
-    { .currentState=State::INITSINGLE, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
-    { .currentState=State::INITSINGLE, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
-    { .currentState=State::INITENTANGLED_AB1, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
-    { .currentState=State::INITENTANGLED_AB1, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
-    { .currentState=State::WAITFORTHROW, .trigger=Trigger::buttonPressed, .nextState=State::INITSINGLE },
-    { .currentState=State::WAITFORTHROW, .trigger=Trigger::closeByAB1, .nextState=State::INITENTANGLED_AB1 },
-    { .currentState=State::WAITFORTHROW, .trigger=Trigger::startRolling, .nextState=State::THROWING },
-    { .currentState=State::WAITFORTHROW, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
-    { .currentState=State::WAITFORTHROW, .trigger=Trigger::timed, .nextState=State::INITSINGLE },
-    { .currentState=State::THROWING, .trigger=Trigger::nonMoving, .nextState=State::INITMEASURED },
-    { .currentState=State::THROWING, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
-    { .currentState=State::INITMEASURED, .trigger=Trigger::measureXYZ, .nextState=State::WAITFORTHROW },
-    { .currentState=State::INITMEASURED, .trigger=Trigger::measurementFail, .nextState=State::THROWING },
-    { .currentState=State::INITMEASURED, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
-    { .currentState=State::CLASSIC_STATE, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
-    { .currentState=State::INITENTANGLED_AB2, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
-    { .currentState=State::INITENTANGLED_AB2, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
-    { .currentState=State::WAITFORTHROW, .trigger=Trigger::closeByAB2, .nextState=State::INITENTANGLED_AB2 },
-    { .currentState=State::INITSINGLE_AFTER_ENT, .trigger=Trigger::lowbattery, .nextState=State::LOWBATTERY },
-    { .currentState=State::INITSINGLE_AFTER_ENT, .trigger=Trigger::timed, .nextState=State::WAITFORTHROW },
-    { .currentState=State::WAITFORTHROW, .trigger=Trigger::entangleStopReceived, .nextState=State::INITSINGLE_AFTER_ENT }
+// State transitions for the quantum dice system
+// Note: This must be accessible by getStateTransition function
+const std::array<StateTransition, 29> StateMachine::stateTransitions = {
+  {// Order: currentMode, nextMode, currentThrowState, nextThrowState, currentEntanglementState,
+   // nextEntanglementState, trigger
+
+   // === CLASSIC MODE TRANSITIONS ===
+   StateTransition{Mode::CLASSIC, Mode::QUANTUM, ThrowState::IDLE, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::PURE, Trigger::BUTTON_PRESSED},
+   StateTransition{Mode::CLASSIC, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
+                   std::nullopt, Trigger::LOW_BATTERY},
+
+   // === QUANTUM MODE - IDLE TRANSITIONS ===
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, ThrowState::THROWING,
+                   EntanglementState::PURE, std::nullopt, Trigger::START_ROLLING},
+   StateTransition{Mode::QUANTUM, Mode::CLASSIC, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::PURE, std::nullopt, Trigger::BUTTON_PRESSED},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::PURE, EntanglementState::ENTANGLE_REQUESTED,
+                   Trigger::CLOSE_BY},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::PURE, EntanglementState::ENTANGLED,
+                   Trigger::ENTANGLE_REQUEST},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::ENTANGLE_REQUESTED, EntanglementState::ENTANGLED,
+                   Trigger::ENTANGLE_CONFIRM},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::ENTANGLE_REQUESTED, EntanglementState::PURE,
+                   Trigger::ENTANGLE_STOP},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::ENTANGLE_REQUESTED, EntanglementState::PURE, Trigger::TIMED},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::ENTANGLED, EntanglementState::PURE, Trigger::ENTANGLE_STOP},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::ENTANGLED, EntanglementState::PURE, Trigger::TIMED},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, ThrowState::THROWING,
+                   EntanglementState::ENTANGLED, std::nullopt, Trigger::START_ROLLING},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, ThrowState::THROWING,
+                   EntanglementState::POST_ENTANGLEMENT, std::nullopt, Trigger::START_ROLLING},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::ENTANGLED, EntanglementState::POST_ENTANGLEMENT,
+                   Trigger::MEASUREMENT_RECEIVED},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::POST_ENTANGLEMENT, EntanglementState::ENTANGLED,
+                   Trigger::ENTANGLE_REQUEST},
+
+   // === QUANTUM MODE - THROWING TRANSITIONS ===
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::THROWING, ThrowState::OBSERVED,
+                   std::nullopt, std::nullopt, Trigger::STOP_ROLLING},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::THROWING, ThrowState::IDLE,
+                   EntanglementState::PURE, EntanglementState::ENTANGLE_REQUESTED,
+                   Trigger::CLOSE_BY},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::THROWING, ThrowState::IDLE,
+                   EntanglementState::PURE, EntanglementState::ENTANGLED,
+                   Trigger::ENTANGLE_REQUEST},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::THROWING, ThrowState::IDLE,
+                   EntanglementState::ENTANGLE_REQUESTED, EntanglementState::ENTANGLED,
+                   Trigger::ENTANGLE_CONFIRM},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::THROWING, std::nullopt,
+                   EntanglementState::ENTANGLED, EntanglementState::POST_ENTANGLEMENT,
+                   Trigger::MEASUREMENT_RECEIVED},
+
+   // === QUANTUM MODE - OBSERVED TRANSITIONS ===
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::OBSERVED, ThrowState::THROWING,
+                   EntanglementState::PURE, std::nullopt, Trigger::START_ROLLING},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::OBSERVED, ThrowState::IDLE,
+                   EntanglementState::PURE, EntanglementState::ENTANGLE_REQUESTED,
+                   Trigger::CLOSE_BY},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::OBSERVED, ThrowState::IDLE,
+                   EntanglementState::PURE, EntanglementState::ENTANGLED,
+                   Trigger::ENTANGLE_REQUEST},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::OBSERVED, ThrowState::IDLE,
+                   EntanglementState::ENTANGLE_REQUESTED, EntanglementState::ENTANGLED,
+                   Trigger::ENTANGLE_CONFIRM},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::OBSERVED, ThrowState::THROWING,
+                   EntanglementState::ENTANGLED, std::nullopt, Trigger::START_ROLLING},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::OBSERVED, ThrowState::THROWING,
+                   EntanglementState::POST_ENTANGLEMENT, EntanglementState::PURE,
+                   Trigger::START_ROLLING},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::OBSERVED, ThrowState::THROWING,
+                   std::nullopt, std::nullopt, Trigger::MEASURE_FAIL},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::OBSERVED, std::nullopt,
+                   EntanglementState::ENTANGLED, EntanglementState::POST_ENTANGLEMENT,
+                   Trigger::MEASUREMENT_RECEIVED},
+
+   // === LOW BATTERY ===
+   StateTransition{std::nullopt, Mode::LOW_BATTERY, std::nullopt, std::nullopt, std::nullopt,
+                   std::nullopt, Trigger::LOW_BATTERY}}
 };
 
-//declaration of instance
-StateMachine::StateMachine()
-    : currentState(State::IDLE), stateEntryTime(0) {
-        // Constructor does not call onEntry. That's done in StateMachine::begin()
-        memset(this->current_peer, 0xFF, 6);
-        memset(this->next_peer, 0xFF, 6);
-        memset(last_source, 0xFF, 6);
-        last_rssi = 0;
+StateTransition StateMachine::getStateTransition(State currentState, Trigger trigger) {
+    for (const StateTransition &transition : StateMachine::stateTransitions) {
+        bool modeMatch = !transition.currentMode.has_value()
+                         || transition.currentMode.value() == currentState.mode;
+        bool throwStateMatch = !transition.currentThrowState.has_value()
+                               || transition.currentThrowState.value() == currentState.throwState;
+        bool entanglementStateMatch
+          = !transition.currentEntanglementState.has_value()
+            || transition.currentEntanglementState.value() == currentState.entanglementState;
+
+        if (modeMatch && throwStateMatch && entanglementStateMatch
+            && transition.trigger == trigger) {
+            return transition;
+        }
     }
+    throw std::runtime_error("No valid state transition found");
+}
+
+// declaration of instance
+StateMachine::StateMachine()
+  : currentState{.mode=Mode::CLASSIC, .throwState=ThrowState::IDLE, .entanglementState=EntanglementState::PURE}, stateEntryTime(0),
+    partnerMeasurementAxis(MeasuredAxises::UNDEFINED), partnerDiceNumber(DiceNumbers::NONE) {
+    // Constructor does not call onEntry. That's done in StateMachine::begin()
+    memset((void *)this->current_peer, 0xFF, 6);
+    memset((void *)this->next_peer, 0xFF, 6);
+    memset((void *)last_source, 0xFF, 6);
+    last_rssi = INT32_MIN;
+}
 
 void StateMachine::begin() {
     // Initialize ESP-NOW with device A MAC from config
     EspNowSensor<message>::Init();
 
-    // Register peers (both sister and brother devices)
-    //EspNowSensor<message>::AddPeer(getMacForRole(roleSister));
-    //EspNowSensor<message>::AddPeer(getMacForRole(roleBrother));
-
-    Serial.println("ESP-NOW initialized successfully!");
+    infoln("ESP-NOW initialized successfully!");
 
     EspNowSensor<message>::PrintMacAddress();
 
-    Serial.println("StateMachine Begin: Calling onEntry for initial state");
-    (this->*stateFunctions[static_cast<int>(currentState)].onEntry)();
+    infoln("StateMachine Begin: Calling onEntry for initial state");
+    printStateName("StateMachine", currentState);
+
+    // Call the onEntry function for the initial state
+    auto it = stateFunctions.find(currentState);
+    if (it != stateFunctions.end()) {
+        (this->*it->second.onEntry)();
+    } else {
+        errorln("ERROR: No state function found for initial state!");
+    }
 }
 
 void StateMachine::changeState(Trigger trigger) {
-    for (const StateTransition& transition : stateTransitions) {
-        if (transition.currentState == currentState && transition.trigger == trigger) {
-            currentState = transition.nextState;
-            printStateName("stateMachine", currentState);
-            //add functions called at stateChange.
-            (this->*stateFunctions[static_cast<int>(currentState)].onEntry)();
-            break;
+    // Get the state transition for the current state and trigger
+    try {
+        StateTransition transition = getStateTransition(currentState, trigger);
+
+        // Create new state based on transition
+        State newState = currentState; // Start with current state
+
+        // Apply transitions if specified
+        if (transition.nextMode.has_value()) {
+            newState.mode = transition.nextMode.value();
         }
+        if (transition.nextThrowState.has_value()) {
+            newState.throwState = transition.nextThrowState.value();
+        }
+        if (transition.nextEntanglementState.has_value()) {
+            newState.entanglementState = transition.nextEntanglementState.value();
+        }
+
+        // Only change if the state actually changed
+        if (!(newState == currentState)) {
+            currentState = newState;
+            printStateName("stateMachine", currentState);
+
+            // Call onEntry function for new state
+            auto it = stateFunctions.find(currentState);
+            if (it != stateFunctions.end()) {
+                (this->*it->second.onEntry)();
+            } else {
+                errorf("ERROR: No state function found for state: %s\n",
+                       getStateName(currentState));
+            }
+        }
+    } catch (const std::runtime_error &e) {
+        errorf("State transition error: %s\n", e.what());
+        debugf("Current state: %s, Trigger: %d\n", getStateName(currentState),
+               static_cast<int>(trigger));
     }
 }
 
 void StateMachine::update() {
-    static unsigned long lastUpdateTime = 0;
+    static unsigned long lastUpdateTime   = 0;
+    static unsigned long lastWatchdogTime = 0;
 
     message data;
     uint8_t source[6];
     int32_t current_rssi;
 
-    while (EspNowSensor<message>::Poll(&data, (unsigned char *) source, &current_rssi)) {
+    while (EspNowSensor<message>::Poll(&data, (unsigned char *)source, &current_rssi)) {
+        // Update RSSI and source for ALL messages to track nearby dice
+        last_rssi = current_rssi;
+        memcpy((void *)last_source, (void *)source, 6);
+
         switch (data.type) {
-            case message_type::MESSAGE_TYPE_WATCH_DOG:  // watch dog, send by all dices
-                if (memcmp((void *) source, this->current_peer, 6) == 0) {
+            case message_type::MESSAGE_TYPE_WATCH_DOG: // watch dog, send by all dices
+                if (memcmp((void *)source, (void *)this->current_peer, 6) == 0) {
                     stateSister = data.data.watchDog.state;
                 }
                 break;
 
-            case message_type::MESSAGE_TYPE_MEASUREMENT:  //send by 2 entangled dices to each other  (A <->B1 or A<->B2). Just store the data in the sisterStates
-                debug("measurement data received from ");
-                if (memcmp((void *) source, this->current_peer, 6) == 0) {
-                    stateSister = data.data.measurement.state;
-                    diceStateSister = data.data.measurement.diceState;
-                    diceNumberSister = data.data.measurement.diceNumber;
+            case message_type::MESSAGE_TYPE_MEASUREMENT: // send by 2 entangled dices to each other.
+                                                         // Store the data in the sisterStates
+                if (memcmp((void *)source, (void *)this->current_peer, 6) == 0) {
+                    debugln("Measurement received from partner - processing immediately");
+                    stateSister       = data.data.measurement.state;
+                    diceNumberSister  = data.data.measurement.diceNumber;
                     measureAxisSister = data.data.measurement.measureAxis;
-                    measurementReceived = true;
+
+                    // Store partner's measurement information
+                    partnerMeasurementAxis = measureAxisSister;
+                    partnerDiceNumber      = diceNumberSister;
+
+                    // Clear current_peer so we can accept new entanglement requests
+                    memset(this->current_peer, 0xFF, 6);
+
+                    // Trigger state transition
+                    changeState(Trigger::MEASUREMENT_RECEIVED);
                 }
                 break;
 
             case message_type::MESSAGE_TYPE_ENTANGLE_REQUEST:
-                last_rssi = current_rssi;
-                memcpy((void *) last_source, (void *) source, 6);
+                debugln("Entanglement request received - processing immediately");
+                // Another dice wants to entangle with us
+                // Store their MAC and send confirmation
+                memcpy((void *)this->current_peer, (void *)source, 6);
+                debugf("Adding peer (current_peer): %02X:%02X:%02X:%02X:%02X:%02X\n",
+                       this->current_peer[0], this->current_peer[1], this->current_peer[2],
+                       this->current_peer[3], this->current_peer[4], this->current_peer[5]);
+                EspNowSensor<message>::AddPeer((uint8_t *)this->current_peer);
+                sendEntanglementConfirm((uint8_t *)source);
+                // Reset local measurement state for new entanglement
+                diceNumberSelf  = DiceNumbers::NONE;
+                upSideSelf      = UpSide::NONE;
+                measureAxisSelf = MeasuredAxises::UNDEFINED;
+                changeState(Trigger::ENTANGLE_REQUEST); // PURE/POST_ENTANGLEMENT -> ENTANGLED
                 break;
 
-            case message_type::MESSAGE_TYPE_ENTANGLE_CONFIRM:  //device A receives confirmation entangle request
-                debug("entanglement confirmation received from ");
-                this->entangleConfirmRcvB1 = true;
+            case message_type::MESSAGE_TYPE_ENTANGLE_CONFIRM: // device A receives confirmation
+                                                              // entangle request
+                debugln("Entanglement confirmation received - processing immediately");
+                // We sent a request and got confirmation - finalize entanglement
+                if (currentState.entanglementState == EntanglementState::ENTANGLE_REQUESTED) {
+                    memcpy((void *)this->current_peer, (void *)this->next_peer, 6);
+                    memset((void *)this->next_peer, 0xFF, 6);
+                    // Reset local measurement state for new entanglement
+                    diceNumberSelf  = DiceNumbers::NONE;
+                    upSideSelf      = UpSide::NONE;
+                    measureAxisSelf = MeasuredAxises::UNDEFINED;
+                    changeState(Trigger::ENTANGLE_CONFIRM); // ENTANGLE_REQUESTED -> ENTANGLED
+                }
                 break;
 
-            case message_type::MESSAGE_TYPE_ENTANGLE_STOP:  //device A sends to B1 or B2 direct
-                debug("stop entanglement received from: ");
-                entangleStopRcv = true;
+            case message_type::MESSAGE_TYPE_ENTANGLE_STOP: // device A sends to B1 or B2 direct
+                debugln("Stop entanglement received - processing immediately");
+                if (currentState.entanglementState == EntanglementState::ENTANGLED) {
+                    changeState(Trigger::ENTANGLE_STOP); // ENTANGLED -> PURE
+                } else if (currentState.entanglementState
+                           == EntanglementState::ENTANGLE_REQUESTED) {
+                    changeState(Trigger::ENTANGLE_STOP); // ENTANGLE_REQUESTED -> PURE
+                }
                 break;
         }
     }
 
     _imuSensor->update();
     unsigned long currentTime = millis();
+
+    // Periodically send watchdog to broadcast presence to nearby dice
+    if (currentTime - lastWatchdogTime >= 500) { // Send every 500ms
+        sendWatchDog();
+        lastWatchdogTime = currentTime;
+    }
+
     if (currentTime - lastUpdateTime >= FSM_UPDATE_INTERVAL) {
-        //add functions called at state update
-        printDiceStateName("DiceState", diceStateSelf);
+        // add functions called at state update
+        //  printDiceStateName("DiceState", diceStateSelf);
         lastUpdateTime = currentTime;
-        (this->*stateFunctions[static_cast<int>(currentState)].whileInState)();
+
+        // Call whileInState function for current state
+        auto it = stateFunctions.find(currentState);
+        if (it != stateFunctions.end()) {
+            (this->*it->second.whileInState)();
+        } else {
+            errorf("ERROR: No state function found for state: %s\n", getStateName(currentState));
+        }
     }
 
     checkTimeForDeepSleep(_imuSensor);
 }
 
-void StateMachine::enterIDLE() {
-    debugln("------------ enter IDLE state -------------");
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    delay(100);
+// ============================================================================
+// STATE HANDLER IMPLEMENTATIONS
+// ============================================================================
 
+// === CLASSIC MODE ===
+
+void StateMachine::enterClassicIdle() {
+    debugln("=== Entering CLASSIC MODE ===");
     stateEntryTime = millis();
-    stateSelf = currentState;
-    diceStateSelf = DiceStates::NONE;
-    prevDiceStateSelf = DiceStates::NONE;
-    diceNumberSelf = DiceNumbers::NONE;
-    upSideSelf = UpSide::NONE;
+    stateSelf      = currentState;
+
+    // Initialize display state
+    diceNumberSelf  = DiceNumbers::NONE;
+    upSideSelf      = UpSide::NONE;
     measureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevMeasureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevUpSideSelf = UpSide::NONE;
+
     sendWatchDog();
     refreshScreens();
-};
-
-void StateMachine::whileIDLE() {
-    voltageIndicator(X0);
-    if (millis() - stateEntryTime > IDLETIME) {
-        setInitialState();  //when leaving the IDLE state, set all states
-        changeState(Trigger::timed);
-    }
 }
 
-void StateMachine::enterINITSINGLE() {
-    debugln("------------ enter INITSINGLE state -------------");
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    delay(100);
-    stateEntryTime = millis();
-    stateSelf = currentState;
-    prevDiceStateSelf = diceStateSelf;  //store for the future
-    diceStateSelf = DiceStates::SINGLE;
-    diceNumberSelf = DiceNumbers::NONE;
-    upSideSelf = UpSide::NONE;
-    measureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevMeasureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevUpSideSelf = UpSide::NONE;
-    refreshScreens();
-    sendWatchDog();
-
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    debugln("------------ exit INITSINGLE state -------------");
-    delay(100);
-};
-
-void StateMachine::whileINITSINGLE() {
+void StateMachine::whileClassicIdle() {
+    // Check for low battery
     if (checkMinimumVoltage()) {
-        changeState(Trigger::lowbattery);
-    } else if (millis() - stateEntryTime > SHOWNEWSTATETIME) {
-        changeState(Trigger::timed);
-    }
-}
-
-void StateMachine::enterINITENTANGLED_AB1() {
-    debugln("------------ enter INITENTANGLED_AB1 state -------------");
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    delay(100);
-    stateEntryTime = millis();
-    stateSelf = currentState;
-
-    //before changing the entangled states, send the currentstate of B1 to B2
-    uint8_t empty[6];
-    memset((void *) empty, 0xFF, 6);
-    if (memcmp(this->current_peer, (void *) empty, 6) != 0) {
-        debugln("End entanglement");
-        delay(100);
-        sendStopEntanglement(this->current_peer);
-        memcpy(this->current_peer, (void *) empty, 6);
+        changeState(Trigger::LOW_BATTERY);
+        return;
     }
 
-    //reset all states
-    prevDiceStateSelf = diceStateSelf;  //store for the future
-    diceStateSelf = DiceStates::ENTANGLED_AB1;
-    diceNumberSelf = DiceNumbers::NONE;
-    upSideSelf = UpSide::NONE;
-    measureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevMeasureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevUpSideSelf = UpSide::NONE;
-
-    //and send them to the oponent dice
-    memcpy(this->current_peer, this->next_peer, 6);
-    memcpy(this->next_peer, empty, 6);
-    debugln("A send measurement to B1");
-    sendMeasurements(this->current_peer, stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, measureAxisSelf);
-
-    refreshScreens();
-    sendWatchDog();
-
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    debugln("------------ exit INITENTANGLED_AB1 state -------------");
-    delay(100);
-}
-
-void StateMachine::whileINITENTANGLED_AB1() {
-    if (checkMinimumVoltage()) {
-        changeState(Trigger::lowbattery);
-    } else if (millis() - stateEntryTime > SHOWNEWSTATETIME) {
-        changeState(Trigger::timed);
-    }
-}
-
-void StateMachine::enterINITENTANGLED_AB2() {
-    debugln("------------ enter INITENTANGLED_AB2 state -------------");
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    delay(100);
-    stateEntryTime = millis();
-    stateSelf = currentState;
-    delay(100);
-
-    //set all states
-    prevDiceStateSelf = diceStateSelf;  //store for the future
-    diceStateSelf = DiceStates::ENTANGLED_AB2;
-    diceNumberSelf = DiceNumbers::NONE;
-    upSideSelf = UpSide::NONE;
-    measureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevMeasureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevUpSideSelf = UpSide::NONE;
-
-    refreshScreens();
-    sendWatchDog();
-
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    debugln("------------ exit INITENTANGLED_AB2 state -------------");
-    delay(100);
-}
-
-void StateMachine::whileINITENTANGLED_AB2() {
-    if (checkMinimumVoltage()) {
-        changeState(Trigger::lowbattery);
-    } else if (millis() - stateEntryTime > SHOWNEWSTATETIME) {
-        changeState(Trigger::timed);
-    }
-}
-
-void StateMachine::enterINITSINGLE_AFTER_ENT() {
-    debugln("------------ enter INITSINGLE_AFTER_ENT state -------------");
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    delay(100);
-    stateEntryTime = millis();
-    stateSelf = currentState;
-    debugln("entered initSingle after entanglement");
-    prevDiceStateSelf = diceStateSelf;  //store for the future
-    diceStateSelf = DiceStates::MEASURED_AFTER_ENT;
-    diceNumberSelf = DiceNumbers::NONE;
-    upSideSelf = UpSide::NONE;
-    measureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevMeasureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevUpSideSelf = UpSide::NONE;
-    refreshScreens();
-    sendWatchDog();
-
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    debugln("------------ exit INITSINGLE_AFTER_ENT state -------------");
-    delay(100);
-}
-
-void StateMachine::whileINITSINGLE_AFTER_ENT() {
-    if (checkMinimumVoltage()) {
-        changeState(Trigger::lowbattery);
-    } else if (millis() - stateEntryTime > SHOWNEWSTATETIME) {
-        changeState(Trigger::timed);
-    }
-}
-
-void StateMachine::enterWAITFORTHROW() {
-    debugln("------------ enter WAIT FOR THROW state -------------");
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    delay(100);
-    stateEntryTime = millis();
-    stateSelf = currentState;            //all other states are unchanged.
-    _imuSensor->resetTumbleDetection();  //prepare for tumbling
-    Serial.print("getTumbleAngleReset: ");
-    Serial.println(_imuSensor->getTumbleAngle());
-    longclicked = false;          //prepare for button use
-    entangleRequestRcvA = false;  //prepare for
-    entangleConfirmRcvB1 = false;
-    entangleConfirmRcvB2 = false;
-    measurementReceived = false;
-    if (diceStateSelf != DiceStates::MEASURED) {  //no refresh in measured state, because this is done in INITMEASURED
-        refreshScreens();
-    }
-    sendWatchDog();
-};
-
-void StateMachine::whileWAITFORTHROW() {
-    static unsigned long lastBroadcastTimeB1 = 0;
-    static unsigned long lastBroadcastTimeB2 = 0;
-    if (checkMinimumVoltage()) {
-        changeState(Trigger::lowbattery);
-    } else if (longclicked) {
+    // Check for button press to switch to quantum mode
+    if (longclicked) {
         longclicked = false;
-        changeState(Trigger::buttonPressed);
-    } else if (_imuSensor->tumbled()) {  //
-        changeState(Trigger::startRolling);
-    } else if (entangleStopRcv) {  //quit the entanglement
-        entangleStopRcv = false;
-        changeState(Trigger::entangleStopReceived);
-    } else if (entangleConfirmRcvB1) {
-        memcpy(this->next_peer, last_source, 6);
-        EspNowSensor<message>::AddPeer(this->next_peer);
-        entangleConfirmRcvB1 = false;
-        changeState(Trigger::closeByAB1);
-    } else if (last_rssi > currentConfig.rssiLimit && last_rssi < -1 && memcmp(last_source, this->current_peer, 6) != 0) {
-        memcpy(this->next_peer, last_source, 6);
-        EspNowSensor<message>::AddPeer(this->next_peer);
-        sendEntanglementConfirm(last_source);
-        last_rssi = 0;
-        changeState(Trigger::closeByAB1);
-    } else if (millis() - lastBroadcastTimeB1 > 500) {
-        uint8_t target[8];
-        memset(target, 0xFF, 6);
-        sendEntangleRequest(target);
-        lastBroadcastTimeB1 = millis();
-    }
-
-    //timeout of entangled state. No rolling during a period, so return to initSingle state
-    if ((diceStateSelf == DiceStates::ENTANGLED_AB1 || diceStateSelf == DiceStates::ENTANGLED_AB2) && (millis() - stateEntryTime > MAXENTANGLEDWAITTIME)) {  //return to initSingle state
-        changeState(Trigger::timed);
-    }
-
-    //when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
-    if (measurementReceived) {
-        measurementReceived = false;
-        prevDiceStateSelf = diceStateSelf;  //store for the future
-        if (diceStateSelf == DiceStates::ENTANGLED_AB1) {
-            diceStateSelf = DiceStates::UN_ENTANGLED_AB1;
-        } else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
-            diceStateSelf = DiceStates::UN_ENTANGLED_AB2;
-        }
-        refreshScreens();  //update screens ackordingly
+        debugln("Button pressed - switching to QUANTUM mode");
+        changeState(Trigger::BUTTON_PRESSED);
     }
 }
 
-void StateMachine::enterTHROWING() {
-    debugln("------------ enter THROWING state -------------");
+// === QUANTUM MODE - IDLE ===
+
+void StateMachine::enterQuantumIdle() {
+    debugln("=== Entering QUANTUM IDLE ===");
     stateEntryTime = millis();
-    stateSelf = currentState;
+    stateSelf      = currentState;
+
+    // Display state depends only on current State (mode, throwState, entanglementState)
+    // No need for separate diceStateSelf variable
+
+    // Reset tumble detection for next throw
+    _imuSensor->resetTumbleDetection();
+
+    // Reset button flag
+    longclicked = false;
+
+    sendWatchDog();
+    refreshScreens();
+}
+
+void StateMachine::whileQuantumIdle() {
+    // Check for low battery
+    if (checkMinimumVoltage()) {
+        changeState(Trigger::LOW_BATTERY);
+        return;
+    }
+
+    // Check for button press to switch back to classic mode
+    if (longclicked && currentState.entanglementState == EntanglementState::PURE) {
+        longclicked = false;
+        debugln("Button pressed - switching to CLASSIC mode");
+        changeState(Trigger::BUTTON_PRESSED);
+        return;
+    }
+
+    // Check if dice is being thrown
+    if (_imuSensor->tumbled()) {
+        debugln("Tumble detected - starting throw");
+        changeState(Trigger::START_ROLLING);
+        return;
+    }
+
+    // Handle entanglement logic
+    switch (currentState.entanglementState) {
+        case EntanglementState::PURE:
+            // Check for nearby dice to initiate entanglement
+            // Don't re-entangle with current or pending partner
+            if (last_rssi > currentConfig.rssiLimit && last_rssi < -1
+                && memcmp((void *)last_source, (void *)this->current_peer, 6) != 0
+                && memcmp((void *)last_source, (void *)this->next_peer, 6) != 0) {
+                debugln("Nearby dice detected - sending entanglement request");
+                memcpy((void *)this->next_peer, (void *)last_source, 6);
+                debugf("Adding peer (next_peer): %02X:%02X:%02X:%02X:%02X:%02X\n",
+                       this->next_peer[0], this->next_peer[1], this->next_peer[2],
+                       this->next_peer[3], this->next_peer[4], this->next_peer[5]);
+                EspNowSensor<message>::AddPeer((uint8_t *)this->next_peer);
+                sendEntangleRequest((uint8_t *)last_source);
+                last_rssi = INT32_MIN;
+                changeState(Trigger::CLOSE_BY); // PURE -> ENTANGLE_REQUESTED
+                return;
+            }
+            break;
+
+        case EntanglementState::ENTANGLE_REQUESTED:
+            // Waiting for partner confirmation
+            // The confirmation is now handled directly in update() method
+            // This state just waits and can timeout
+            if (millis() - stateEntryTime > MAXENTANGLEDWAITTIME) {
+                debugln("Entanglement request timeout - returning to PURE state");
+                changeState(Trigger::TIMED);
+                return;
+            }
+            break;
+
+        case EntanglementState::ENTANGLED:
+            // Just waiting for throw or measurement from partner
+            break;
+    }
+}
+
+// === QUANTUM MODE - THROWING ===
+
+void StateMachine::enterThrowing() {
+    debugln("=== Dice is THROWING ===");
+    stateEntryTime = millis();
+    stateSelf      = currentState;
+
     refreshScreens();
     sendWatchDog();
-};
+}
 
-void StateMachine::whileTHROWING() {
+void StateMachine::whileThrowing() {
+    // Check for low battery
     if (checkMinimumVoltage()) {
-        changeState(Trigger::lowbattery);
-    } else if (_imuSensor->stable() && _imuSensor->on_table()) {
-        //  } else if (_imuSensor->isNotMoving() && (withinBounds(abs(_imuSensor->getXGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getYGravity()), LOWERBOUND, UPPERBOUND) || withinBounds(abs(_imuSensor->getZGravity()), LOWERBOUND, UPPERBOUND))) {
-        debugln("stable and on table triggered");
-    changeState(Trigger::nonMoving);
-}
-//when in entangled state and the sister or brother dice sends the measurement, then change state of the dice to UN_ENTANGLED_AB1/2 and refresh screens
-if (measurementReceived) {
-    measurementReceived = false;
-    prevDiceStateSelf = diceStateSelf;  //store for the future
-    if (diceStateSelf == DiceStates::ENTANGLED_AB1) {
-        diceStateSelf = DiceStates::UN_ENTANGLED_AB1;
-    } else if (diceStateSelf == DiceStates::ENTANGLED_AB2) {
-        diceStateSelf = DiceStates::UN_ENTANGLED_AB2;
+        changeState(Trigger::LOW_BATTERY);
+        return;
     }
-    refreshScreens();  //update screens ackordingly
-}
-};
 
-void StateMachine::enterINITMEASURED() {
-    debugln("------------ enter MEASUREMENT state -------------");
-    printDiceStateName2("Curent diceState: ", diceStateSelf);
-    printDiceStateName2("Previous diceState: ", prevDiceStateSelf);
-    delay(100);
+    // Check if dice has landed and is stable
+    if (_imuSensor->stable() && _imuSensor->on_table()) {
+        debugln("Dice stable and on table - moving to OBSERVED");
+        changeState(Trigger::STOP_ROLLING);
+        return;
+    }
+
+    // Check for nearby dice to initiate entanglement (only when PURE)
+    // This will transition to IDLE + ENTANGLE_REQUESTED state
+    if (currentState.entanglementState == EntanglementState::PURE) {
+        // Check for nearby dice to initiate entanglement
+        // Don't re-entangle with current or pending partner
+        if (last_rssi > currentConfig.rssiLimit && last_rssi < -1
+            && memcmp((void *)last_source, (void *)this->current_peer, 6) != 0
+            && memcmp((void *)last_source, (void *)this->next_peer, 6) != 0) {
+            debugln(
+              "Nearby dice detected in THROWING - sending entanglement request and returning to "
+              "IDLE");
+            memcpy((void *)this->next_peer, (void *)last_source, 6);
+            debugf("Adding peer (next_peer): %02X:%02X:%02X:%02X:%02X:%02X\n", this->next_peer[0],
+                   this->next_peer[1], this->next_peer[2], this->next_peer[3], this->next_peer[4],
+                   this->next_peer[5]);
+            EspNowSensor<message>::AddPeer((uint8_t *)this->next_peer);
+            sendEntangleRequest((uint8_t *)last_source);
+            last_rssi = INT32_MIN;
+            changeState(Trigger::CLOSE_BY); // Will transition to IDLE + ENTANGLE_REQUESTED
+            return;
+        }
+    }
+
+    // Partner measurement is handled directly in update() method via MEASUREMENT_RECEIVED trigger
+}
+
+// === QUANTUM MODE - OBSERVED (MEASUREMENT) ===
+
+void StateMachine::enterObserved() {
+    debugln("=== Dice OBSERVED - Processing measurement ===");
     stateEntryTime = millis();
-    stateSelf = currentState;
+    stateSelf      = currentState;
+
+    // Check if dice is still moving (measurement failure)
     if (_imuSensor->moving()) {
-        changeState(Trigger::measurementFail);  //back to throwing state
+        debugln("Dice still moving - measurement failed");
+        changeState(Trigger::MEASURE_FAIL);
+        return;
     }
 
-    debug("gravity XYZ: ");
-    debug(_imuSensor->accelX());
-    debug(", ");
-    debug(_imuSensor->accelY());
-    debug(", ");
-    debug(_imuSensor->accelZ());
-    debugln("");
-
-    debugln(_imuSensor->getOrientationString());
-
+    // Determine which axis is facing up
     IMU_Orientation orient = _imuSensor->orientation();
 
     switch (orient) {
         case IMU_Orientation::ORIENTATION_Z_UP:
             measureAxisSelf = MeasuredAxises::ZAXIS;
-            upSideSelf = UpSide::Z0;
-            debugln("upside Z+");
+            upSideSelf      = UpSide::Z0;
+            debugln("Measured: Z+ axis");
             break;
         case IMU_Orientation::ORIENTATION_Z_DOWN:
             measureAxisSelf = MeasuredAxises::ZAXIS;
-            upSideSelf = UpSide::Z1;
-            debugln("upside Z-");
+            upSideSelf      = UpSide::Z1;
+            debugln("Measured: Z- axis");
             break;
         case IMU_Orientation::ORIENTATION_X_UP:
             measureAxisSelf = MeasuredAxises::XAXIS;
-            upSideSelf = UpSide::X0;
-            debugln("upside X+");
+            upSideSelf      = UpSide::X1; // Inverted: X_UP maps to X1
+            debugln("Measured: X+ axis");
             break;
         case IMU_Orientation::ORIENTATION_X_DOWN:
             measureAxisSelf = MeasuredAxises::XAXIS;
-            upSideSelf = UpSide::X1;
-            debugln("upside X-");
+            upSideSelf      = UpSide::X0; // Inverted: X_DOWN maps to X0
+            debugln("Measured: X- axis");
             break;
         case IMU_Orientation::ORIENTATION_Y_UP:
             measureAxisSelf = MeasuredAxises::YAXIS;
-            upSideSelf = UpSide::Y0;
-            debugln("upside Y+");
+            upSideSelf      = UpSide::Y0;
+            debugln("Measured: Y+ axis");
             break;
         case IMU_Orientation::ORIENTATION_Y_DOWN:
             measureAxisSelf = MeasuredAxises::YAXIS;
-            upSideSelf = UpSide::Y1;
-            debugln("upside Y-");
+            upSideSelf      = UpSide::Y1;
+            debugln("Measured: Y- axis");
             break;
         case IMU_Orientation::ORIENTATION_TILTED:
         case IMU_Orientation::ORIENTATION_UNKNOWN:
-            debugln("no clear axis");
-            changeState(Trigger::measurementFail);  //back to throwing state
-            return;                                 // Stay in current state
+            debugln("No clear axis - measurement failed");
+            changeState(Trigger::MEASURE_FAIL);
+            return;
     }
 
-    // The secret sauce to set diceNumber on top
-    switch (diceStateSelf) {
-        case DiceStates::SINGLE:
-            debugln("single state secret sauce");
+    // Determine the dice number based on entanglement state
+    switch (currentState.entanglementState) {
+        case EntanglementState::PURE:
+            // Simple random number 1-6
+            debugln("PURE state: generating random number");
             diceNumberSelf = selectOneToSix();
             break;
 
-        case DiceStates::MEASURED:  // 2 options: same measureAxisSelf or different measureAxis
-            debugln("measured state secret sauce");
-            if (measureAxisSelf != prevMeasureAxisSelf) {  // different, generate random upNumber
-                debugln("measured state. different axis");
-                diceNumberSelf = selectOneToSix();
-            } else {  // same axis
-                debugln("measured state. same axis. do nothing: ");
-                // nothing to do - diceNumberSelf is already set and will be put on top
-            }
+        case EntanglementState::ENTANGLED:
+            // We measured first - generate random and send to partner
+            debugln("ENTANGLED state: we measured first");
+            diceNumberSelf = selectOneToSix();
+
+            // Send our measurement to partner
+            sendMeasurements(this->current_peer, stateSelf, diceNumberSelf, upSideSelf,
+                             measureAxisSelf);
+
+            // Clear entanglement
+            currentState.entanglementState = EntanglementState::PURE;
+            stateSelf.entanglementState = EntanglementState::PURE;
+            memset(this->current_peer, 0xFF, 6);
             break;
 
-        case DiceStates::ENTANGLED_AB1:
-        case DiceStates::UN_ENTANGLED_AB1:
-            {
-                debugln("entang AB1 secret sauce");
-                // Determine dice number based on config and sister state
-                if (currentConfig.alwaysSeven) {
-                    diceNumberSelf = (measureAxisSister != MeasuredAxises::UNDEFINED)
-                        ? selectOppositeOneToSix(diceNumberSister)
-                        : selectOneToSix();
-                    debugln((measureAxisSister != MeasuredAxises::UNDEFINED) ? "sister ready. always seven mode" : "different axis");
-                } else {
-                    diceNumberSelf = (measureAxisSelf == measureAxisSister)
-                        ? selectOppositeOneToSix(diceNumberSister)
-                        : selectOneToSix();
-                    debugln((measureAxisSelf == measureAxisSister) ? "sister ready. same axis" : "different axis");
-                }
-                // Send measurements to the opponent dice
-                sendMeasurements(this->current_peer, stateSelf, DiceStates::MEASURED, diceNumberSelf, upSideSelf, measureAxisSelf);
-                memset(this->current_peer, 0, 6);
-                break;
-            }
+        case EntanglementState::POST_ENTANGLEMENT:
+            // Partner measured first - check if same axis
+            debugln("POST_ENTANGLEMENT state: partner measured first");
 
-        case DiceStates::ENTANGLED_AB2:
-        case DiceStates::UN_ENTANGLED_AB2:
-            {
-                debugln("entang AB2 secret sauce");
-                // Determine dice number based on config and sister state
-                if (currentConfig.alwaysSeven) {
-                    diceNumberSelf = (measureAxisSister != MeasuredAxises::UNDEFINED)
-                        ? selectOppositeOneToSix(diceNumberSister)
-                        : selectOneToSix();
-                    debugln((measureAxisSister != MeasuredAxises::UNDEFINED) ? "sister ready. always seven mode" : "different axis");
-                } else {
-                    diceNumberSelf = (measureAxisSelf == measureAxisSister)
-                        ? selectOppositeOneToSix(diceNumberSister)
-                        : selectOneToSix();
-                    debugln((measureAxisSelf == measureAxisSister) ? "sister ready. same axis" : "different axis");
-                }
-                break;
-            }
-
-        case DiceStates::MEASURED_AFTER_ENT:  // 2 options: no sister diceNumber or with diceNumber
-            debugln("measured after entang secret sauce");
-            if (diceNumberSister == DiceNumbers::NONE) {  // different, generate random upNumber
-                debugln("no diceNumberSister");
-                diceNumberSelf = selectOneToSix();
+            if (measureAxisSelf == partnerMeasurementAxis) {
+                // Same measurement basis - show opposite value (sum = 7)
+                debugln("Same axis as partner - showing opposite value");
+                diceNumberSelf = selectOppositeOneToSix(partnerDiceNumber);
             } else {
-                debugln("defined diceNumberSister");
-                diceNumberSelf = diceNumberSister;
+                // Different measurement basis - random value
+                debugln("Different axis from partner - random value");
+                diceNumberSelf = selectOneToSix();
             }
+
+            // Clear partner info and entanglement
+            partnerMeasurementAxis = MeasuredAxises::UNDEFINED;
+            partnerDiceNumber      = DiceNumbers::NONE;
+            currentState.entanglementState = EntanglementState::PURE;
+            stateSelf.entanglementState = EntanglementState::PURE;
+            break;
+
+        case EntanglementState::ENTANGLE_REQUESTED:
+            // Shouldn't happen, but treat as PURE
+            diceNumberSelf = selectOneToSix();
             break;
     }
 
+    // Store previous states
     prevMeasureAxisSelf = measureAxisSelf;
-    prevUpSideSelf = upSideSelf;           // preserve for the history
-    prevDiceStateSelf = diceStateSelf;     // store for the future
-    diceStateSelf = DiceStates::MEASURED;  // here the final diceState is set to measured
+    prevUpSideSelf      = upSideSelf;
 
-    refreshScreens();  // often redundant, because nothing changed after throwing
+    // Reset tumble detection so we're ready for the next throw
+    _imuSensor->resetTumbleDetection();
+
+    refreshScreens();
     sendWatchDog();
 }
 
-void StateMachine::whileINITMEASURED() {
+void StateMachine::whileObserved() {
+    // Check for low battery
     if (checkMinimumVoltage()) {
-        changeState(Trigger::lowbattery);
+        changeState(Trigger::LOW_BATTERY);
+        return;
     }
-    if (millis() - stateEntryTime > STABTIME) {
-        changeState(Trigger::measureXYZ);
+
+    // Check if dice is being thrown again
+    if (_imuSensor->tumbled()) {
+        debugln("Tumble detected - starting new throw");
+        changeState(Trigger::START_ROLLING);
+        return;
     }
+
+    // Check for nearby dice to initiate entanglement (only when PURE)
+    // This will transition to IDLE + ENTANGLE_REQUESTED state
+    if (currentState.entanglementState == EntanglementState::PURE) {
+        // Check for nearby dice to initiate entanglement
+        // Don't re-entangle with current or pending partner
+        if (last_rssi > currentConfig.rssiLimit && last_rssi < -1
+            && memcmp((void *)last_source, (void *)this->current_peer, 6) != 0
+            && memcmp((void *)last_source, (void *)this->next_peer, 6) != 0) {
+            debugln(
+              "Nearby dice detected in OBSERVED - sending entanglement request and returning to "
+              "IDLE");
+            memcpy((void *)this->next_peer, (void *)last_source, 6);
+            debugf("Adding peer (next_peer): %02X:%02X:%02X:%02X:%02X:%02X\n", this->next_peer[0],
+                   this->next_peer[1], this->next_peer[2], this->next_peer[3], this->next_peer[4],
+                   this->next_peer[5]);
+            EspNowSensor<message>::AddPeer((uint8_t *)this->next_peer);
+            sendEntangleRequest((uint8_t *)last_source);
+            last_rssi = INT32_MIN;
+            changeState(Trigger::CLOSE_BY); // Will transition to IDLE + ENTANGLE_REQUESTED
+            return;
+        }
+    }
+
+    // Stay in OBSERVED state showing the measured value
+    // Wait for user to roll again
 }
 
-void StateMachine::enterLOWBATTERY() {
+// === LOW BATTERY ===
+
+void StateMachine::enterLowBattery() {
+    debugln("=== LOW BATTERY STATE ===");
     stateEntryTime = millis();
-    stateSelf = currentState;
-    prevDiceStateSelf = diceStateSelf;  // store for the future
-    diceStateSelf = DiceStates::NONE;
+    stateSelf      = currentState;
+
+    diceNumberSelf  = DiceNumbers::NONE;
+    upSideSelf      = UpSide::NONE;
     measureAxisSelf = MeasuredAxises::UNDEFINED;
-    prevMeasureAxisSelf = MeasuredAxises::UNDEFINED;
-    diceNumberSelf = DiceNumbers::NONE;
-    upSideSelf = UpSide::NONE;
-    prevUpSideSelf = UpSide::NONE;
+
     sendWatchDog();
     refreshScreens();
-};
+}
 
-void StateMachine::whileLOWBATTERY() {
+void StateMachine::whileLowBattery() {
+    // Display battery indicator
     voltageIndicator(XX);
-};
-
-void StateMachine::enterCLASSIC_STATE() {
-    stateEntryTime = millis();
-    longclicked = false;
-    stateSelf = currentState;
-    diceStateSelf = DiceStates::CLASSIC;
-    sendWatchDog();
-    refreshScreens();
-};
-
-void StateMachine::whileCLASSIC_STATE() {
-    if (checkMinimumVoltage()) {
-        changeState(Trigger::lowbattery);
-    } else if (longclicked) {
-        longclicked = false;
-        changeState(Trigger::buttonPressed);
-    }
-};
+}

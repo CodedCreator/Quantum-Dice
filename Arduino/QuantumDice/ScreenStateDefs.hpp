@@ -2,27 +2,12 @@
 #ifndef SCREENSTATEDEFS_H_
 #define SCREENSTATEDEFS_H_
 
-#include "StateMachine.hpp"  // Ensure this is included
-                             //truth table at the end of this file
+#include "StateMachine.hpp"
 
-extern State stateSelf, stateSister;  //use of the StateMachine inputs
+// Global state variables for screen display
+extern State stateSelf, stateSister;
 
-enum class DiceStates : uint8_t {
-    SINGLE,
-    ENTANGLED_AB1,
-    ENTANGLED_AB2,
-    UN_ENTANGLED_AB1,
-    UN_ENTANGLED_AB2,
-    MEASURED,
-    MEASURED_AFTER_ENT,
-    ALL,
-    NONE,
-    CLASSIC,
-    ANY,
-    NA
-};
-extern DiceStates diceStateSelf, prevDiceStateSelf, diceStateSister;
-
+// Dice numbers (1-6)
 enum class DiceNumbers : uint8_t {
     NONE,
     ONE,
@@ -30,11 +15,7 @@ enum class DiceNumbers : uint8_t {
     THREE,
     FOUR,
     FIVE,
-    SIX,
-    CROSS,
-    CIRCLE,
-    ANY,
-    NA
+    SIX
 };
 extern DiceNumbers diceNumberSelf, diceNumberSister;
 
@@ -44,7 +25,7 @@ enum class MeasuredAxises : uint8_t {
     YAXIS,
     ZAXIS,
     ALL,
-    NA  //not applicable
+    NA // not applicable
 };
 extern MeasuredAxises measureAxisSelf, prevMeasureAxisSelf, measureAxisSister;
 
@@ -62,30 +43,33 @@ enum class UpSide : uint8_t {
 extern UpSide upSideSelf, prevUpSideSelf, upSideSister;
 
 enum class ScreenStates : uint8_t {
+    // Splash screens
     GODDICE,
     WELCOME,
+    QLAB_LOGO,
+    QRCODE,
+    UT_LOGO,
+
+    // Number displays (1-6)
     N1,
     N2,
     N3,
     N4,
     N5,
     N6,
-    MIX1TO6,
-    MIX1TO6_ENTAB1,
-    MIX1TO6_ENTAB2,
+
+    // Quantum superposition states
+    MIX1TO6,           // Normal quantum superposition
+    MIX1TO6_ENTANGLED, // Entangled superposition (different color)
+
+    // Special states
     LOWBATTERY,
-    BLANC,
-    XO,
-    XOENTANG,
+    BLANC, // Blank screen
     DIAGNOSE,
-    RESET,
-    X_STATE,
-    O_STATE,
-    QLAB_LOGO,
-    QRCODE,
-    UT_LOGO
+    RESET
 };
-extern ScreenStates x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState, z0ReqScreenState, z1ReqScreenState;  //actual screenstates of x, y and z
+extern ScreenStates x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState,
+  z0ReqScreenState, z1ReqScreenState;
 
 enum class BlinkStates : uint8_t {
     OFF,
@@ -93,37 +77,23 @@ enum class BlinkStates : uint8_t {
 };
 extern BlinkStates blinkState;
 
-
-struct TruthTableEntry {
-    State state;
-    DiceStates diceState;
-    DiceNumbers diceNumber;
-    UpSide upSide;
-    ScreenStates x0ScreenState;  //defined screenstate
-    ScreenStates x1ScreenState;
-    ScreenStates y0ScreenState;
-    ScreenStates y1ScreenState;
-    ScreenStates z0ScreenState;
-    ScreenStates z1ScreenState;
-};
-// Declare the truth table as an external variable
-extern TruthTableEntry truthTable[];
-
 // Function prototypes
-auto findValues(State state, DiceStates diceState, DiceNumbers diceNumber, UpSide upSide, ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) -> bool;
+auto findValues(State state, DiceNumbers diceNumber, UpSide upSide, ScreenStates &x0ScreenState,
+                ScreenStates &x1ScreenState, ScreenStates &y0ScreenState,
+                ScreenStates &y1ScreenState, ScreenStates &z0ScreenState,
+                ScreenStates &z1ScreenState) -> bool;
 
-//void printValues(ScreenStates x, ScreenStates y, ScreenStates z);
+// void printValues(ScreenStates x, ScreenStates y, ScreenStates z);
 
-//const char *toString(ScreenStates value);
+// const char *toString(ScreenStates value);
 
 void callFunction(ScreenStates result);
 
-void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, ScreenStates y1, ScreenStates z0, ScreenStates z1);
+void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, ScreenStates y1,
+                           ScreenStates z0, ScreenStates z1);
 void refreshScreens();
 auto selectOneToSix() -> DiceNumbers;
 auto selectOppositeOneToSix(DiceNumbers diceNumberTop) -> DiceNumbers;
 void printDiceStateName(const char *objectName, DiceStates diceState);
-void printDiceStateName2(const char *objectName, DiceStates diceState);
-
 
 #endif /* SCREENSTATEDEFS_H_ */
