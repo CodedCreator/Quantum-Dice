@@ -56,19 +56,10 @@ rssiLimit=-35
 # Set to true or false (or 1/0)
 isSMD=true           # true for SMD components, false for HDR
 isNano=false         # true for NANO board, false for DEVKIT
-alwaysSeven=true     # DEBUG: Force dice to always show 7
 
 # ==========================================
 # OPERATIONAL PARAMETERS
 # ==========================================
-# Random switch point (0-100%)
-# Percentage threshold for random value generation
-randomSwitchPoint=50
-
-# Tumble detection constant
-# Tumbling angle required to detect dice is being rolled
-tumbleConstant=45
-
 # Deep sleep timeout (milliseconds)
 # Time of inactivity before entering deep sleep
 # 300000 = 5 minutes, 600000 = 10 minutes
