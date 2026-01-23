@@ -1,7 +1,8 @@
 name: Compile code using arduino-cli
 on: pull_request
 jobs:
-  compile:
+  esp32s3_dev:
+    name: ESP32S3_DEV
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -15,4 +16,4 @@ jobs:
 
       - name: Compile the project
         run: |
-          arduino-cli compile "Arduino/QuantumDice"
+          arduino-cli compile --jobs 0 --profile esp32s3_dev_module Arduino/QuantumDice

@@ -27,7 +27,7 @@ jobs:
 
       - name: Generate compilation database
         run: |
-          arduino-cli compile --build-path Arduino/QuantumDice/build --only-compilation-database Arduino/QuantumDice
+          arduino-cli compile --jobs 0 --profile esp32s3_dev_module --build-path Arduino/QuantumDice/build --only-compilation-database Arduino/QuantumDice
 
       - name: Make lint script executable
         run: chmod +x scripts/lint.sh
