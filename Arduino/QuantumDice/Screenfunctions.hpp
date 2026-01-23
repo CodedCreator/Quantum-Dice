@@ -63,7 +63,7 @@ void displayN4(uint8_t screens);
 void displayN5(uint8_t screens);
 void displayN6(uint8_t screens);
 void displayMix1to6(uint8_t screens);
-void displayMix1to6_entangled(uint8_t screens, uint16_t color);
+void displayMix1to6_entangled(uint8_t screens);
 void printChar(uint8_t screens, char *letters, uint16_t fontcolor, uint16_t bckcolor, int x, int y);
 void voltageIndicator(uint8_t screens);
 void welcomeInfo(uint8_t screens);

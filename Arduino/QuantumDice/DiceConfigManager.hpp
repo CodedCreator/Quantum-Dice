@@ -19,6 +19,7 @@ struct DiceConfig {
     uint16_t z_background;
     uint16_t entang_colors[8];    // Available entanglement colors (RGB565)
     uint8_t  entang_colors_count; // Number of colors in array
+    uint16_t colorFlashTimeout;   // Color flash duration in milliseconds
     int8_t   rssiLimit;           // RSSI limit for entanglement detection
     bool     isSMD;               // true for SMD, false for HDR
     bool     isNano;              // true for NANO, false for DEVKIT

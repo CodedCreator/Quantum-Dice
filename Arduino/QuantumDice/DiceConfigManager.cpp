@@ -146,6 +146,8 @@ auto DiceConfigManager::load(const char *filename) -> bool {
             if (_verbose && _config.entang_colors_count > 0) {
                 infof("Loaded %d entanglement colors\n", _config.entang_colors_count);
             }
+        } else if (strcmp(key, "colorFlashTimeout") == 0) {
+            _config.colorFlashTimeout = (uint16_t)strtoul(value, nullptr, 0);
         } else if (strcmp(key, "rssiLimit") == 0) {
             _config.rssiLimit = (int8_t)strtol(value, nullptr, 0);
         } else if (strcmp(key, "isSMD") == 0) {
@@ -233,6 +235,7 @@ auto DiceConfigManager::save(const char *filename) -> bool {
         }
     }
     file.println();
+    file.printf("colorFlashTimeout=%u\n", _config.colorFlashTimeout);
     file.println();
 
     // RSSI Settings
@@ -544,6 +547,9 @@ void DiceConfigManager::initDefaultConfig() {
     _config.entang_colors[3]    = 0xF81F; // Magenta
     _config.entang_colors_count = 4;
 
+    // Default color flash timeout (250ms)
+    _config.colorFlashTimeout = 250;
+
     // Default RSSI
     _config.rssiLimit = -35;
 
@@ -722,6 +728,7 @@ auto createDefaultConfigFile(const char *filename, bool verbose) -> bool {
     file.println("y_background=0");
     file.println("z_background=0");
     file.println("entang_colors=65504,2016,2047,63519");
+    file.println("colorFlashTimeout=250");
     file.println();
     file.println("# RSSI Settings");
     file.println("rssiLimit=-70");

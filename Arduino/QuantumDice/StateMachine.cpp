@@ -206,6 +206,13 @@ void StateMachine::sendEntanglementConfirm(uint8_t *target) {
 
     entanglement_color_self = myData.data.entangleConfirm.color;
 
+    // Trigger color flash if showColors is disabled
+    if (!showColors) {
+        flashColor = true;
+        flashColorStartTime = millis();
+        debugln("Triggering color flash (accepting entanglement)");
+    }
+
     EspNowSensor<message>::Send(myData, target);
 }
 
@@ -578,6 +585,13 @@ void StateMachine::update() {
                     entanglement_color_self  = this->entanglement_color; // Update global
                     debugf("Received entanglement color: 0x%04X\n", this->entanglement_color);
 
+                    // Trigger color flash if showColors is disabled
+                    if (!showColors) {
+                        flashColor = true;
+                        flashColorStartTime = millis();
+                        debugln("Triggering color flash (receiving entanglement)");
+                    }
+
                     // Reset local measurement state for new entanglement
                     diceNumberSelf  = DiceNumbers::NONE;
                     upSideSelf      = UpSide::NONE;
@@ -672,6 +686,14 @@ void StateMachine::update() {
                         this->entanglement_color = teleported_color;
                         entanglement_color_self  = this->entanglement_color; // Update global
                         debugf("Inherited entanglement color: 0x%04X\n", this->entanglement_color);
+                        
+                        // Trigger color flash if showColors is disabled
+                        if (!showColors) {
+                            flashColor = true;
+                            flashColorStartTime = millis();
+                            debugln("Triggering color flash (receiving teleportation)");
+                        }
+                        
                         diceNumberSelf  = DiceNumbers::NONE;
                         upSideSelf      = UpSide::NONE;
                         measureAxisSelf = MeasuredAxises::UNDEFINED;
@@ -730,10 +752,29 @@ void StateMachine::update() {
     _imuSensor->update();
     unsigned long currentTime = millis();
 
+    // State-independent: Handle short click to toggle color display (only in QUANTUM mode)
+    if (clicked) {
+        clicked = false;
+        if (currentState.mode == Mode::QUANTUM) {
+            showColors = !showColors;
+            debugf("Color display toggled: %s\n", showColors ? "ON" : "OFF");
+            refreshScreens(); // Refresh to show the change immediately
+        } else {
+            debugln("Short click ignored in CLASSIC mode");
+        }
+    }
+
     // Periodically send watchdog to broadcast presence to nearby dice
     if (currentTime - lastWatchdogTime >= 500) { // Send every 500ms
         sendWatchDog();
         lastWatchdogTime = currentTime;
+    }
+
+    // State-independent: Handle color flash timeout
+    if (flashColor && (currentTime - flashColorStartTime >= currentConfig.colorFlashTimeout)) {
+        debugln("Color flash timeout - refreshing screens to show white");
+        flashColor = false;
+        refreshScreens(); // Update display to show white instead of color
     }
 
     if (currentTime - lastUpdateTime >= FSM_UPDATE_INTERVAL) {

@@ -37,6 +37,10 @@ z_background=0            # Black
 # Examples: Yellow=65504, Green=2016, Cyan=2047, Magenta=63519, Red=63488, Blue=31
 entang_colors=65504,2016,2047,63519
 
+# Color flash timeout (milliseconds)
+# Duration to show actual color when receiving entanglement (if showColors is OFF)
+colorFlashTimeout=250
+
 # ==========================================
 # RSSI SETTINGS
 # ==========================================

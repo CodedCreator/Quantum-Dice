@@ -5,8 +5,11 @@
 #include "StateMachine.hpp"
 
 // Global state variables for screen display
-extern State    stateSelf, stateSister;
-extern uint16_t entanglement_color_self; // RGB565 color for current entanglement
+extern State          stateSelf, stateSister;
+extern uint16_t       entanglement_color_self; // RGB565 color for current entanglement
+extern bool           showColors;              // Toggle to show/hide entanglement colors
+extern bool           flashColor;              // Whether to flash color briefly
+extern unsigned long  flashColorStartTime;     // When the color flash started
 
 // Dice numbers (1-6)
 enum class DiceNumbers : uint8_t {
