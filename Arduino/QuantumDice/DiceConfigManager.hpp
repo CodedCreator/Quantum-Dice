@@ -19,12 +19,10 @@ struct DiceConfig {
     uint16_t z_background;
     uint16_t entang_colors[8];    // Available entanglement colors (RGB565)
     uint8_t  entang_colors_count; // Number of colors in array
+    uint16_t colorFlashTimeout;   // Color flash duration in milliseconds
     int8_t   rssiLimit;           // RSSI limit for entanglement detection
     bool     isSMD;               // true for SMD, false for HDR
     bool     isNano;              // true for NANO, false for DEVKIT
-    bool     alwaysSeven;         // Force dice to always produce 7
-    uint8_t  randomSwitchPoint;   // Threshold for random value (0-100)
-    float    tumbleConstant;      // Number of tumbles to detect tumbling
     uint32_t deepSleepTimeout;    // Deep sleep timeout in milliseconds
     uint8_t  checksum;            // Simple checksum for validation
 };
@@ -63,7 +61,6 @@ class DiceConfigManager {
     void setRssiLimit(int8_t limit);
     void setIsSMD(bool value);
     void setIsNano(bool value);
-    void setAlwaysSeven(bool value);
 
     // Utility functions
     void        printConfig();

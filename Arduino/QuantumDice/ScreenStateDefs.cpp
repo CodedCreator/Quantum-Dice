@@ -13,6 +13,11 @@ DiceNumbers    diceNumberSelf, diceNumberSister;
 UpSide         upSideSelf, prevUpSideSelf, upSideSister;
 uint16_t       entanglement_color_self = 0xFFE0; // Default yellow
 uint16_t       prev_entanglement_color = 0xFFE0; // Track previous color for change detection
+bool           showColors              = true;   // Toggle for showing entanglement colors
+bool           prev_showColors         = true;   // Track previous showColors state
+bool           flashColor              = false;  // Whether to flash color briefly
+bool           prev_flashColor         = false;  // Track previous flashColor state
+unsigned long  flashColorStartTime     = 0;      // When the color flash started
 ScreenStates   x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState,
   z0ReqScreenState, z1ReqScreenState;
 
@@ -71,8 +76,7 @@ static void callFunction(ScreenStates result, screenselections screens) {
             return;
         case ScreenStates::MIX1TO6_ENTANGLED:
             debugln("Entering MIX1TO6_ENTANGLED case");
-            // Use the current entanglement color
-            displayMix1to6_entangled(screens, entanglement_color_self);
+            displayMix1to6_entangled(screens);
             return;
         case ScreenStates::LOWBATTERY:
             debugln("Entering LOWBATTERY case");
@@ -116,11 +120,26 @@ void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, Sc
     static ScreenStates prevZ1 = ScreenStates::BLANC;
 
     // Check if color changed - if so, force refresh of all entangled screens
-    bool colorChanged = (entanglement_color_self != prev_entanglement_color);
-    if (colorChanged) {
-        debugf("Entanglement color changed from 0x%04X to 0x%04X - forcing screen refresh\n",
-               prev_entanglement_color, entanglement_color_self);
-        prev_entanglement_color = entanglement_color_self;
+    bool colorChanged      = (entanglement_color_self != prev_entanglement_color);
+    bool showColorsChanged = (showColors != prev_showColors);
+    bool flashColorChanged = (flashColor != prev_flashColor);
+
+    if (colorChanged || showColorsChanged || flashColorChanged) {
+        if (showColorsChanged) {
+            debugf("Show colors toggled from %s to %s - forcing screen refresh\n",
+                   prev_showColors ? "ON" : "OFF", showColors ? "ON" : "OFF");
+            prev_showColors = showColors;
+        }
+        if (colorChanged) {
+            debugf("Entanglement color changed from 0x%04X to 0x%04X - forcing screen refresh\n",
+                   prev_entanglement_color, entanglement_color_self);
+            prev_entanglement_color = entanglement_color_self;
+        }
+        if (flashColorChanged) {
+            debugf("Flash color toggled from %s to %s - forcing screen refresh\n",
+                   prev_flashColor ? "ON" : "OFF", flashColor ? "ON" : "OFF");
+            prev_flashColor = flashColor;
+        }
         // Force refresh of any entangled screens by resetting their prev state
         if (x0 == ScreenStates::MIX1TO6_ENTANGLED) {
             prevX0 = ScreenStates::BLANC;

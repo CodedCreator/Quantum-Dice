@@ -146,18 +146,14 @@ auto DiceConfigManager::load(const char *filename) -> bool {
             if (_verbose && _config.entang_colors_count > 0) {
                 infof("Loaded %d entanglement colors\n", _config.entang_colors_count);
             }
+        } else if (strcmp(key, "colorFlashTimeout") == 0) {
+            _config.colorFlashTimeout = (uint16_t)strtoul(value, nullptr, 0);
         } else if (strcmp(key, "rssiLimit") == 0) {
             _config.rssiLimit = (int8_t)strtol(value, nullptr, 0);
         } else if (strcmp(key, "isSMD") == 0) {
             _config.isSMD = parseBool(value);
         } else if (strcmp(key, "isNano") == 0) {
             _config.isNano = parseBool(value);
-        } else if (strcmp(key, "alwaysSeven") == 0) {
-            _config.alwaysSeven = parseBool(value);
-        } else if (strcmp(key, "randomSwitchPoint") == 0) {
-            _config.randomSwitchPoint = (uint8_t)strtol(value, nullptr, 0);
-        } else if (strcmp(key, "tumbleConstant") == 0) {
-            _config.tumbleConstant = strtod(value, nullptr);
         } else if (strcmp(key, "deepSleepTimeout") == 0) {
             _config.deepSleepTimeout = strtoul(value, nullptr, 0);
         } else if (strcmp(key, "checksum") == 0) {
@@ -233,6 +229,7 @@ auto DiceConfigManager::save(const char *filename) -> bool {
         }
     }
     file.println();
+    file.printf("colorFlashTimeout=%u\n", _config.colorFlashTimeout);
     file.println();
 
     // RSSI Settings
@@ -244,13 +241,10 @@ auto DiceConfigManager::save(const char *filename) -> bool {
     file.println("# Hardware Configuration");
     file.printf("isSMD=%s\n", _config.isSMD ? "true" : "false");
     file.printf("isNano=%s\n", _config.isNano ? "true" : "false");
-    file.printf("alwaysSeven=%s\n", _config.alwaysSeven ? "true" : "false");
     file.println();
 
     // Operational Parameters
     file.println("# Operational Parameters");
-    file.printf("randomSwitchPoint=%u\n", _config.randomSwitchPoint);
-    file.printf("tumbleConstant=%.2f\n", _config.tumbleConstant);
     file.printf("deepSleepTimeout=%u\n", _config.deepSleepTimeout);
     file.println();
 
@@ -283,22 +277,6 @@ auto DiceConfigManager::validate() -> bool {
     if (strlen((char *)_config.diceId) == 0) {
         if (_verbose) {
             infoln("Validation error: diceId is empty");
-        }
-        valid = false;
-    }
-
-    // Check randomSwitchPoint is in range
-    if (_config.randomSwitchPoint > 100) {
-        if (_verbose) {
-            infoln("Validation error: randomSwitchPoint > 100");
-        }
-        valid = false;
-    }
-
-    // Check tumbleConstant is positive
-    if (_config.tumbleConstant <= 0) {
-        if (_verbose) {
-            infoln("Validation error: tumbleConstant <= 0");
         }
         valid = false;
     }
@@ -342,10 +320,6 @@ void DiceConfigManager::setIsNano(bool value) {
     _config.isNano = value;
 }
 
-void DiceConfigManager::setAlwaysSeven(bool value) {
-    _config.alwaysSeven = value;
-}
-
 // Print configuration
 void DiceConfigManager::printConfig() {
     infoln("=== Dice Configuration ===");
@@ -364,9 +338,6 @@ void DiceConfigManager::printConfig() {
     infof("RSSI Limit: %d dBm\n", _config.rssiLimit);
     infof("Is SMD: %s\n", _config.isSMD ? "true" : "false");
     infof("Is Nano: %s\n", _config.isNano ? "true" : "false");
-    infof("Always Seven: %s\n", _config.alwaysSeven ? "true" : "false");
-    infof("Random Switch Point: %u%%\n", _config.randomSwitchPoint);
-    infof("Tumble Constant: %.2f\n", _config.tumbleConstant);
     infof("Deep Sleep Timeout: %u ms\n", _config.deepSleepTimeout);
     infof("Checksum: 0x%02X\n", _config.checksum);
     infoln("==========================");
@@ -544,18 +515,18 @@ void DiceConfigManager::initDefaultConfig() {
     _config.entang_colors[3]    = 0xF81F; // Magenta
     _config.entang_colors_count = 4;
 
+    // Default color flash timeout (250ms)
+    _config.colorFlashTimeout = 250;
+
     // Default RSSI
     _config.rssiLimit = -35;
 
     // Default hardware config
-    _config.isSMD       = true;
-    _config.isNano      = false;
-    _config.alwaysSeven = false;
+    _config.isSMD  = true;
+    _config.isNano = false;
 
     // Default operational parameters
-    _config.randomSwitchPoint = 50;
-    _config.tumbleConstant    = 45;     //=cos(45)
-    _config.deepSleepTimeout  = 300000; // 5 minutes
+    _config.deepSleepTimeout = 300000; // 5 minutes
 
     // Checksum (will be calculated on save)
     _config.checksum = 0;
@@ -608,9 +579,6 @@ void printGlobalConfig() {
     infof("RSSI Limit: %d dBm\n", currentConfig.rssiLimit);
     infof("Is SMD: %s\n", currentConfig.isSMD ? "true" : "false");
     infof("Is Nano: %s\n", currentConfig.isNano ? "true" : "false");
-    infof("Always Seven: %s\n", currentConfig.alwaysSeven ? "true" : "false");
-    infof("Random Switch Point: %u%%\n", currentConfig.randomSwitchPoint);
-    infof("Tumble Constant: %.2f\n", currentConfig.tumbleConstant);
     infof("Deep Sleep Timeout: %u ms\n", currentConfig.deepSleepTimeout);
     infof("Checksum: 0x%02X\n", currentConfig.checksum);
     infoln("============================");
@@ -722,6 +690,7 @@ auto createDefaultConfigFile(const char *filename, bool verbose) -> bool {
     file.println("y_background=0");
     file.println("z_background=0");
     file.println("entang_colors=65504,2016,2047,63519");
+    file.println("colorFlashTimeout=250");
     file.println();
     file.println("# RSSI Settings");
     file.println("rssiLimit=-70");
@@ -729,11 +698,8 @@ auto createDefaultConfigFile(const char *filename, bool verbose) -> bool {
     file.println("# Hardware Configuration");
     file.println("isSMD=false");
     file.println("isNano=false");
-    file.println("alwaysSeven=false");
     file.println();
     file.println("# Operational Parameters");
-    file.println("randomSwitchPoint=50");
-    file.println("tumbleConstant=2.5");
     file.println("deepSleepTimeout=300000");
     file.println();
     file.println("# Checksum (auto-calculated on save)");

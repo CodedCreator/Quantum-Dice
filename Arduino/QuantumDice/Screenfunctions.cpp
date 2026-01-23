@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <Arduino.h>
 
-
 // Global TFT object - will be initialized dynamically
 Adafruit_GC9A01A tft(-1, -1, -1); // Temporary pins, will be reinitialized
 
@@ -307,14 +306,29 @@ void displayMix1to6(uint8_t screens) {
     drawDot(centerX, centerY, 3 * 0.2);
 }
 
-void displayMix1to6_entangled(uint8_t screens, uint16_t color) {
+void displayMix1to6_entangled(uint8_t screens) {
     selectScreens(screens);
     tft.fillScreen(GC9A01A_BLACK);
     int centerX = tft.width() / 2;
     int centerY = tft.height() / 2;
     int offset  = DOT_OFFSET;
 
-    // Use provided entanglement color
+    // Determine color to show
+    uint16_t color;
+    if (showColors) {
+        // Show colors enabled - always show the entanglement color
+        color = entanglement_color_self;
+    } else {
+        // Show colors disabled - check if we're in flash mode
+        if (flashColor) {
+            // Flash active - show actual color
+            color = entanglement_color_self;
+        } else {
+            // Flash inactive - show white
+            color = 0xFFFF;
+        }
+    }
+
     drawDot(centerX - offset, centerY - offset, (3 * 0.16) + 0.2, color);
     drawDot(centerX + offset, centerY - offset, (5 * 0.16) + 0.2, color);
     drawDot(centerX - offset, centerY, (1 * 0.16) + 0.2, color);
