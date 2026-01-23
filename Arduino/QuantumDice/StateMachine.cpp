@@ -37,6 +37,10 @@ using message = struct message {
             UpSide         upSide;
         } measurement;
 
+        struct _entangleConfirmData {
+            uint16_t color; // RGB565 color for this entanglement
+        } entangleConfirm;
+
         struct _teleportRequestData {
             uint8_t target_dice[6]; // MAC address of dice B (the target for teleportation)
         } teleportRequest;
@@ -47,6 +51,7 @@ using message = struct message {
             DiceNumbers    diceNumber;        // Dice number if observed
             UpSide         upSide;            // Up side if observed
             uint8_t        entangled_peer[6]; // MAC of N if M is entangled to N
+            uint16_t       color;             // Entanglement color (RGB565)
         } teleportPayload;
 
         struct _teleportPartnerData {
@@ -164,6 +169,7 @@ void StateMachine::sendWatchDog() {
 
 void StateMachine::sendMeasurements(uint8_t *target, State state, DiceNumbers diceNumber,
                                     UpSide upSide, MeasuredAxises measureAxis) {
+    EspNowSensor<message>::AddPeer(target);
     message myData;
     debugln("Send Measurements message initated");
     myData.type                         = message_type::MESSAGE_TYPE_MEASUREMENT;
@@ -175,19 +181,36 @@ void StateMachine::sendMeasurements(uint8_t *target, State state, DiceNumbers di
 }
 
 void StateMachine::sendEntangleRequest(uint8_t *target) {
+    EspNowSensor<message>::AddPeer(target);
     message myData;
     myData.type = message_type::MESSAGE_TYPE_ENTANGLE_REQUEST;
     EspNowSensor<message>::Send(myData, target);
 }
 
 void StateMachine::sendEntanglementConfirm(uint8_t *target) {
+    EspNowSensor<message>::AddPeer(target);
     debugln("Send entanglement confirm");
     message myData;
     myData.type = message_type::MESSAGE_TYPE_ENTANGLE_CONFIRM;
+
+    // Pick a random color from available colors
+    if (currentConfig.entang_colors_count > 0) {
+        uint8_t colorIndex                = random(0, currentConfig.entang_colors_count);
+        myData.data.entangleConfirm.color = currentConfig.entang_colors[colorIndex];
+        debugf("Selected entanglement color: 0x%04X (index %d of %d)\n",
+               myData.data.entangleConfirm.color, colorIndex, currentConfig.entang_colors_count);
+    } else {
+        myData.data.entangleConfirm.color = 0xFFE0; // Default yellow if no colors configured
+        debugln("No colors configured, using default yellow");
+    }
+
+    entanglement_color_self = myData.data.entangleConfirm.color;
+
     EspNowSensor<message>::Send(myData, target);
 }
 
 void StateMachine::sendEntangleDenied(uint8_t *target) {
+    EspNowSensor<message>::AddPeer(target);
     debugln("Send entangle denied");
     message myData;
     myData.type = message_type::MESSAGE_TYPE_ENTANGLE_DENIED;
@@ -195,6 +218,7 @@ void StateMachine::sendEntangleDenied(uint8_t *target) {
 }
 
 void StateMachine::sendTeleportRequest(uint8_t *target_m, uint8_t *target_b) {
+    EspNowSensor<message>::AddPeer(target_m);
     debugln("Send teleport request");
     message myData;
     myData.type = message_type::MESSAGE_TYPE_TELEPORT_REQUEST;
@@ -203,6 +227,7 @@ void StateMachine::sendTeleportRequest(uint8_t *target_m, uint8_t *target_b) {
 }
 
 void StateMachine::sendTeleportConfirm(uint8_t *target) {
+    EspNowSensor<message>::AddPeer(target);
     debugln("Send teleport confirm");
     message myData;
     myData.type = message_type::MESSAGE_TYPE_TELEPORT_CONFIRM;
@@ -211,7 +236,8 @@ void StateMachine::sendTeleportConfirm(uint8_t *target) {
 
 void StateMachine::sendTeleportPayload(uint8_t *target, State state, DiceNumbers diceNumber,
                                        UpSide upSide, MeasuredAxises measureAxis,
-                                       uint8_t *entangled_peer) {
+                                       uint8_t *entangled_peer, uint16_t color) {
+    EspNowSensor<message>::AddPeer(target);
     debugln("Send teleport payload");
     message myData;
     myData.type                             = message_type::MESSAGE_TYPE_TELEPORT_PAYLOAD;
@@ -219,11 +245,13 @@ void StateMachine::sendTeleportPayload(uint8_t *target, State state, DiceNumbers
     myData.data.teleportPayload.measureAxis = measureAxis;
     myData.data.teleportPayload.diceNumber  = diceNumber;
     myData.data.teleportPayload.upSide      = upSide;
+    myData.data.teleportPayload.color       = color;
     memcpy((void *)myData.data.teleportPayload.entangled_peer, (void *)entangled_peer, 6);
     EspNowSensor<message>::Send(myData, target);
 }
 
 void StateMachine::sendTeleportPartner(uint8_t *target_n, uint8_t *new_partner_b) {
+    EspNowSensor<message>::AddPeer(target_n);
     debugln("Send teleport partner update");
     message myData;
     myData.type = message_type::MESSAGE_TYPE_TELEPORT_PARTNER;
@@ -242,7 +270,7 @@ void setInitialState() {
 
 // State transitions for the quantum dice system
 // Note: This must be accessible by getStateTransition function
-const std::array<StateTransition, 36> StateMachine::stateTransitions = {
+const std::array<StateTransition, 37> StateMachine::stateTransitions = {
   {// Order: currentMode, nextMode, currentThrowState, nextThrowState, currentEntanglementState,
    // nextEntanglementState, trigger
 
@@ -264,6 +292,9 @@ const std::array<StateTransition, 36> StateMachine::stateTransitions = {
                    EntanglementState::TELEPORTED, EntanglementState::PURE, Trigger::BUTTON_PRESSED},
    StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
                    EntanglementState::PURE, EntanglementState::ENTANGLE_REQUESTED,
+                   Trigger::CLOSE_BY},
+   StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
+                   EntanglementState::POST_ENTANGLEMENT, EntanglementState::ENTANGLE_REQUESTED,
                    Trigger::CLOSE_BY},
    StateTransition{Mode::QUANTUM, std::nullopt, ThrowState::IDLE, std::nullopt,
                    EntanglementState::PURE, EntanglementState::ENTANGLED,
@@ -490,8 +521,14 @@ void StateMachine::update() {
                 // Check if we're in CLASSIC mode - deny entanglement
                 if (currentState.mode == Mode::CLASSIC) {
                     debugln("CLASSIC mode - denying entanglement request");
-                    // Must add peer before we can send to them
-                    EspNowSensor<message>::AddPeer((uint8_t *)source);
+                    sendEntangleDenied((uint8_t *)source);
+                    break;
+                }
+
+                // Check if we're already waiting for confirmation - deny to prevent race condition
+                if (currentState.entanglementState == EntanglementState::ENTANGLE_REQUESTED) {
+                    debugln(
+                      "Already in ENTANGLE_REQUESTED - denying to prevent symmetric entanglement");
                     sendEntangleDenied((uint8_t *)source);
                     break;
                 }
@@ -507,19 +544,18 @@ void StateMachine::update() {
 
                     // Store M's address in next_peer for later reference
                     memcpy((void *)this->next_peer, (void *)source, 6);
-                    EspNowSensor<message>::AddPeer((uint8_t *)this->next_peer);
 
                     // We'll transition to PURE after receiving TELEPORT_CONFIRM
                     // Don't change state yet - wait for confirmation
                 } else {
                     // Normal entanglement request
                     // Another dice wants to entangle with us
-                    // Store their MAC and send confirmation
+                    // Store their MAC and send confirmation with our chosen color
                     memcpy((void *)this->current_peer, (void *)source, 6);
                     debugf("Adding peer (current_peer): %02X:%02X:%02X:%02X:%02X:%02X\n",
                            this->current_peer[0], this->current_peer[1], this->current_peer[2],
                            this->current_peer[3], this->current_peer[4], this->current_peer[5]);
-                    EspNowSensor<message>::AddPeer((uint8_t *)this->current_peer);
+
                     sendEntanglementConfirm((uint8_t *)source);
                     // Reset local measurement state for new entanglement
                     diceNumberSelf  = DiceNumbers::NONE;
@@ -536,6 +572,12 @@ void StateMachine::update() {
                 if (currentState.entanglementState == EntanglementState::ENTANGLE_REQUESTED) {
                     memcpy((void *)this->current_peer, (void *)this->next_peer, 6);
                     memset((void *)this->next_peer, 0xFF, 6);
+
+                    // Store the entanglement color from the confirming dice
+                    this->entanglement_color = data.data.entangleConfirm.color;
+                    entanglement_color_self  = this->entanglement_color; // Update global
+                    debugf("Received entanglement color: 0x%04X\n", this->entanglement_color);
+
                     // Reset local measurement state for new entanglement
                     diceNumberSelf  = DiceNumbers::NONE;
                     upSideSelf      = UpSide::NONE;
@@ -567,9 +609,6 @@ void StateMachine::update() {
                     uint8_t target_b[6];
                     memcpy((void *)target_b, (void *)data.data.teleportRequest.target_dice, 6);
 
-                    // Add B as peer
-                    EspNowSensor<message>::AddPeer((uint8_t *)target_b);
-
                     // If M is entangled to N, inform N that its new partner is B
                     if (currentState.entanglementState == EntanglementState::ENTANGLED) {
                         uint8_t empty[6];
@@ -582,9 +621,8 @@ void StateMachine::update() {
 
                     // Send TELEPORT_PAYLOAD to B with our current state
                     sendTeleportPayload(target_b, stateSelf, diceNumberSelf, upSideSelf,
-                                        measureAxisSelf, this->current_peer);
-
-                    // Send TELEPORT_CONFIRM to A
+                                        measureAxisSelf, this->current_peer,
+                                        this->entanglement_color);
                     sendTeleportConfirm((uint8_t *)source);
 
                     // Clear our entanglement if we had one
@@ -615,7 +653,10 @@ void StateMachine::update() {
                 debugln("Teleport payload received - B receiving M's state");
 
                 {
-                    State teleported_state = data.data.teleportPayload.state;
+                    State    teleported_state = data.data.teleportPayload.state;
+                    uint16_t teleported_color = data.data.teleportPayload.color;
+
+                    debugf("Received teleportation with color: 0x%04X\n", teleported_color);
 
                     // Remove old peer (A) from peer list
                     memset(this->current_peer, 0xFF, 6);
@@ -626,9 +667,11 @@ void StateMachine::update() {
                         debugln("Teleported state is ENTANGLED - B now entangled to N");
                         memcpy((void *)this->current_peer,
                                (void *)data.data.teleportPayload.entangled_peer, 6);
-                        EspNowSensor<message>::AddPeer((uint8_t *)this->current_peer);
 
-                        // Reset measurement state for new entanglement
+                        // Store the teleported entanglement color
+                        this->entanglement_color = teleported_color;
+                        entanglement_color_self  = this->entanglement_color; // Update global
+                        debugf("Inherited entanglement color: 0x%04X\n", this->entanglement_color);
                         diceNumberSelf  = DiceNumbers::NONE;
                         upSideSelf      = UpSide::NONE;
                         measureAxisSelf = MeasuredAxises::UNDEFINED;
@@ -675,10 +718,6 @@ void StateMachine::update() {
 
                     // Update current_peer to B
                     memcpy((void *)this->current_peer, (void *)new_partner_b, 6);
-
-                    // Add B as peer
-                    debugln("Adding B to peer list");
-                    EspNowSensor<message>::AddPeer((uint8_t *)this->current_peer);
 
                     // N stays in ENTANGLED state, just with a different partner
                     // No state transition needed
@@ -810,7 +849,6 @@ void StateMachine::whileQuantumIdle() {
                 debugf("Adding peer (next_peer): %02X:%02X:%02X:%02X:%02X:%02X\n",
                        this->next_peer[0], this->next_peer[1], this->next_peer[2],
                        this->next_peer[3], this->next_peer[4], this->next_peer[5]);
-                EspNowSensor<message>::AddPeer((uint8_t *)this->next_peer);
                 sendEntangleRequest((uint8_t *)last_source);
                 last_rssi = INT32_MIN;
                 changeState(Trigger::CLOSE_BY); // PURE/TELEPORTED -> ENTANGLE_REQUESTED
@@ -830,7 +868,6 @@ void StateMachine::whileQuantumIdle() {
                 debugf("Initiating teleport to M (next_peer): %02X:%02X:%02X:%02X:%02X:%02X\n",
                        this->next_peer[0], this->next_peer[1], this->next_peer[2],
                        this->next_peer[3], this->next_peer[4], this->next_peer[5]);
-                EspNowSensor<message>::AddPeer((uint8_t *)this->next_peer);
 
                 // Send TELEPORT_REQUEST directly with current_peer (B) as target
                 sendTeleportRequest((uint8_t *)last_source, this->current_peer);
@@ -906,7 +943,6 @@ void StateMachine::whileThrowing() {
             debugf("Adding peer (next_peer): %02X:%02X:%02X:%02X:%02X:%02X\n", this->next_peer[0],
                    this->next_peer[1], this->next_peer[2], this->next_peer[3], this->next_peer[4],
                    this->next_peer[5]);
-            EspNowSensor<message>::AddPeer((uint8_t *)this->next_peer);
             sendEntangleRequest((uint8_t *)last_source);
             last_rssi = INT32_MIN;
             changeState(Trigger::CLOSE_BY); // Will transition to IDLE + ENTANGLE_REQUESTED
@@ -1095,7 +1131,6 @@ void StateMachine::whileObserved() {
             debugf("Adding peer (next_peer): %02X:%02X:%02X:%02X:%02X:%02X\n", this->next_peer[0],
                    this->next_peer[1], this->next_peer[2], this->next_peer[3], this->next_peer[4],
                    this->next_peer[5]);
-            EspNowSensor<message>::AddPeer((uint8_t *)this->next_peer);
             sendEntangleRequest((uint8_t *)last_source);
             last_rssi = INT32_MIN;
             changeState(Trigger::CLOSE_BY); // Will transition to IDLE + ENTANGLE_REQUESTED

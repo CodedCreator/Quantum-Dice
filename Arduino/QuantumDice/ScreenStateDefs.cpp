@@ -7,11 +7,12 @@
 
 #include <Arduino.h>
 
-
 State          stateSelf, stateSister;
 MeasuredAxises measureAxisSelf, prevMeasureAxisSelf, measureAxisSister;
 DiceNumbers    diceNumberSelf, diceNumberSister;
 UpSide         upSideSelf, prevUpSideSelf, upSideSister;
+uint16_t       entanglement_color_self = 0xFFE0; // Default yellow
+uint16_t       prev_entanglement_color = 0xFFE0; // Track previous color for change detection
 ScreenStates   x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState,
   z0ReqScreenState, z1ReqScreenState;
 
@@ -70,7 +71,8 @@ static void callFunction(ScreenStates result, screenselections screens) {
             return;
         case ScreenStates::MIX1TO6_ENTANGLED:
             debugln("Entering MIX1TO6_ENTANGLED case");
-            displayMix1to6_entAB1(screens); // Reuse existing entangled display function
+            // Use the current entanglement color
+            displayMix1to6_entangled(screens, entanglement_color_self);
             return;
         case ScreenStates::LOWBATTERY:
             debugln("Entering LOWBATTERY case");
@@ -112,6 +114,33 @@ void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, Sc
     static ScreenStates prevX1 = ScreenStates::BLANC;
     static ScreenStates prevY1 = ScreenStates::BLANC;
     static ScreenStates prevZ1 = ScreenStates::BLANC;
+
+    // Check if color changed - if so, force refresh of all entangled screens
+    bool colorChanged = (entanglement_color_self != prev_entanglement_color);
+    if (colorChanged) {
+        debugf("Entanglement color changed from 0x%04X to 0x%04X - forcing screen refresh\n",
+               prev_entanglement_color, entanglement_color_self);
+        prev_entanglement_color = entanglement_color_self;
+        // Force refresh of any entangled screens by resetting their prev state
+        if (x0 == ScreenStates::MIX1TO6_ENTANGLED) {
+            prevX0 = ScreenStates::BLANC;
+        }
+        if (y0 == ScreenStates::MIX1TO6_ENTANGLED) {
+            prevY0 = ScreenStates::BLANC;
+        }
+        if (z0 == ScreenStates::MIX1TO6_ENTANGLED) {
+            prevZ0 = ScreenStates::BLANC;
+        }
+        if (x1 == ScreenStates::MIX1TO6_ENTANGLED) {
+            prevX1 = ScreenStates::BLANC;
+        }
+        if (y1 == ScreenStates::MIX1TO6_ENTANGLED) {
+            prevY1 = ScreenStates::BLANC;
+        }
+        if (z1 == ScreenStates::MIX1TO6_ENTANGLED) {
+            prevZ1 = ScreenStates::BLANC;
+        }
+    }
 
     if (x0 != prevX0) {
         // debug("X0:");
