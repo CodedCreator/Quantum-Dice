@@ -138,6 +138,11 @@ template<typename T> void EspNowSensor<T>::addPeer(uint8_t *addr) {
     peerInfo.encrypt = false;
 
     memcpy((void *) peerInfo.peer_addr, addr, 6);
+    const auto exists = esp_now_is_peer_exist(addr);
+    if (exists) {
+        Serial.println("Peer already exists - skipping add");
+        return;
+    }
     if (esp_now_add_peer(&peerInfo) != ESP_OK) {
         Serial.println("Failed to add brother peer");
     }

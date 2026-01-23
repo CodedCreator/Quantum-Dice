@@ -18,7 +18,7 @@
 #define debugf(fmt, ...)
 #endif
 
-#define info(...) Serial.print("[L]"); Serial.print(__VA_ARGS__)
+#define info(...) Serial.print("[L] "); Serial.print(__VA_ARGS__)
 #define infoln(...) Serial.print("[LOG]\t"); Serial.print(__VA_ARGS__); Serial.println()
 #define infof(fmt, ...) \
     Serial.print("[L] "); \

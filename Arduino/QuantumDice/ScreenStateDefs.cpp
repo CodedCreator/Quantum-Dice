@@ -1,222 +1,111 @@
-#include <Arduino.h>
-#include "defines.hpp"
-#include "handyHelpers.hpp"
-#include "Screenfunctions.hpp"
-#include "ScreenDeterminator.hpp"  //TruthTable to select screens from various states
-                                   //#include "StateMachine.hpp"
 #include "ScreenStateDefs.hpp"
 
-State stateSelf, stateSister;  //state is used for TruthTable. Is copy of currenState.
-DiceStates diceStateSelf, prevDiceStateSelf, diceStateSister;
+#include "defines.hpp"
+#include "handyHelpers.hpp"
+#include "ScreenDeterminator.hpp" // Use new dynamic screen determination
+#include "Screenfunctions.hpp"
+
+#include <Arduino.h>
+
+
+State          stateSelf, stateSister;
 MeasuredAxises measureAxisSelf, prevMeasureAxisSelf, measureAxisSister;
-DiceNumbers diceNumberSelf, diceNumberSister;     //diceNumberSister is number of sister, diceNumberSelf is own number
-UpSide upSideSelf, prevUpSideSelf, upSideSister;  //upSideSister is upside from the sister
-ScreenStates x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState, z0ReqScreenState, z1ReqScreenState;
+DiceNumbers    diceNumberSelf, diceNumberSister;
+UpSide         upSideSelf, prevUpSideSelf, upSideSister;
+ScreenStates   x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState,
+  z0ReqScreenState, z1ReqScreenState;
 
 BlinkStates blinkState;
 
-void printDiceStateName(const char *objectName, DiceStates diceState) {
-    static DiceStates previousDiceState = DiceStates::NONE;  // Local static variable to retain its value between function calls
-    /*
-       DiceStates::SINGLE
-       DiceStates::ENTANGLED
-       DiceStates::MEASURED
-       DiceStates::ALL
-       DiceStates::NONE
-       DiceStates::CLASSIC
-       */
-    if (diceState != previousDiceState) {
-        debug(objectName);
-        debug(": ");
-        switch (diceState) {
-            case DiceStates::SINGLE:
-                debugln("DiceStates::SINGLE");
-                break;
-            case DiceStates::ENTANGLED_AB1:
-                debugln("DiceStates::ENTANGLED_AB1");
-                break;
-            case DiceStates::ENTANGLED_AB2:
-                debugln("DiceStates::ENTANGLED_AB2");
-                break;
-            case DiceStates::UN_ENTANGLED_AB1:
-                debugln("DiceStates::UN_ENTANGLED_AB1");
-                break;
-            case DiceStates::UN_ENTANGLED_AB2:
-                debugln("DiceStates::UN_ENTANGLED_AB2");
-                break;
-            case DiceStates::MEASURED:
-                debugln("DiceStates::MEASURED");
-                break;
-            case DiceStates::MEASURED_AFTER_ENT:
-                debugln("DiceStates::MEASURED_AFTER_ENT");
-                break;
-            case DiceStates::ALL:
-                debugln("DiceStates::ALL");
-                break;
-            case DiceStates::NONE:
-                debugln("DiceStates::NONE");
-                break;
-            case DiceStates::CLASSIC:
-                debugln("DiceStates::CLASSIC");
-                break;
-        }
-        previousDiceState = diceState;  // Update previousState
-    }
-}
+constexpr uint8_t DICE_MIN = 1;
+constexpr uint8_t DICE_MAX = 6;
 
-void printDiceStateName2(const char *objectName, DiceStates diceState) {
-    static DiceStates previousDiceState = DiceStates::NONE;  // Local static variable to retain its value between function calls
-
-    debug(objectName);
-    debug(": ");
-    switch (diceState) {
-        case DiceStates::SINGLE:
-            debugln("DiceStates::SINGLE");
-            break;
-        case DiceStates::ENTANGLED_AB1:
-            debugln("DiceStates::ENTANGLED_AB1");
-            break;
-        case DiceStates::ENTANGLED_AB2:
-            debugln("DiceStates::ENTANGLED_AB2");
-            break;
-        case DiceStates::UN_ENTANGLED_AB1:
-            debugln("DiceStates::UN_ENTANGLED_AB1");
-            break;
-        case DiceStates::UN_ENTANGLED_AB2:
-            debugln("DiceStates::UN_ENTANGLED_AB2");
-            break;
-        case DiceStates::MEASURED:
-            debugln("DiceStates::MEASURED");
-            break;
-        case DiceStates::MEASURED_AFTER_ENT:
-            debugln("DiceStates::MEASURED_AFTER_ENT");
-            break;
-        case DiceStates::ALL:
-            debugln("DiceStates::ALL");
-            break;
-        case DiceStates::NONE:
-            debugln("DiceStates::NONE");
-            break;
-        case DiceStates::CLASSIC:
-            debugln("DiceStates::CLASSIC");
-            break;
-    }
-}
-
-auto findValues(State  /*state*/, DiceStates  /*diceState*/, DiceNumbers  /*diceNumber*/, UpSide  /*upSide*/, ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) -> bool {
-    // bool findValues(State state, DiceNumbers diceNumber, UpSide upSide,
-    //                 ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) {
-    // bool findValues(State state, UpSide upSide, UpSide upSideSister,
-    //                 ScreenStates &x0ScreenState, ScreenStates &x1ScreenState, ScreenStates &y0ScreenState, ScreenStates &y1ScreenState, ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) {
-    for (const auto &entry : truthTable) {
-        if (entry.state == stateSelf && (entry.diceState == diceStateSelf || entry.diceState == DiceStates::ANY) && (entry.diceNumber == diceNumberSelf || entry.diceNumber == DiceNumbers::ANY) && (entry.upSide == upSideSelf || entry.upSide == UpSide::ANY)) {
-            x0ScreenState = entry.x0ScreenState;
-            y0ScreenState = entry.y0ScreenState;
-            z0ScreenState = entry.z0ScreenState;
-            x1ScreenState = entry.x1ScreenState;
-            y1ScreenState = entry.y1ScreenState;
-            z1ScreenState = entry.z1ScreenState;
-            return true;
-        }
-    }
-    return false;  // No match found
+auto findValues(State state, DiceNumbers diceNumber, UpSide upSide, ScreenStates &x0ScreenState,
+                ScreenStates &x1ScreenState, ScreenStates &y0ScreenState,
+                ScreenStates &y1ScreenState, ScreenStates &z0ScreenState,
+                ScreenStates &z1ScreenState) -> bool {
+    // Use new dynamic screen determination instead of truth table
+    return determineScreenStates(stateSelf, diceNumberSelf, upSideSelf, x0ScreenState,
+                                 x1ScreenState, y0ScreenState, y1ScreenState, z0ScreenState,
+                                 z1ScreenState);
 }
 
 static void callFunction(ScreenStates result, screenselections screens) {
     switch (result) {
         case ScreenStates::GODDICE:
+            debugln("Entering GODDICE case");
             displayEinstein(screens);
-            Serial.println("GODDICE function called");
-            break;
+            return;
         case ScreenStates::WELCOME:
+            debugln("Entering WELCOME case");
             welcomeInfo(screens);
-            Serial.println("WELCOME function called");
-            break;
+            return;
         case ScreenStates::N1:
+            debugln("Entering N1 case");
             displayN1(screens);
-            //Serial.println("N1 function called");
-            break;
+            return;
         case ScreenStates::N2:
+            debugln("Entering N2 case");
             displayN2(screens);
-            //Serial.println("N2 function called");
-            break;
+            return;
         case ScreenStates::N3:
+            debugln("Entering N3 case");
             displayN3(screens);
-            //Serial.println("N3 function called");
-            break;
+            return;
         case ScreenStates::N4:
+            debugln("Entering N4 case");
             displayN4(screens);
-            //Serial.println("N4 function called");
-            break;
+            return;
         case ScreenStates::N5:
+            debugln("Entering N5 case");
             displayN5(screens);
-            //Serial.println("N5 function called");
-            break;
+            return;
         case ScreenStates::N6:
+            debugln("Entering N6 case");
             displayN6(screens);
-            //Serial.println("N6 function called");
-            break;
+            return;
         case ScreenStates::MIX1TO6:
+            debugln("Entering MIX1TO6 case");
             displayMix1to6(screens);
-            //Serial.println("MIX1TO6 function called");
-            break;
-        case ScreenStates::MIX1TO6_ENTAB1:
-            displayMix1to6_entAB1(screens);
-            //Serial.println("MIX1TO6_ENTAB1 function called");
-            break;
-        case ScreenStates::MIX1TO6_ENTAB2:
-            displayMix1to6_entAB2(screens);
-            //Serial.println("MIX1TO6_ENTAB2 function called");
-            break;
+            return;
+        case ScreenStates::MIX1TO6_ENTANGLED:
+            debugln("Entering MIX1TO6_ENTANGLED case");
+            displayMix1to6_entAB1(screens); // Reuse existing entangled display function
+            return;
         case ScreenStates::LOWBATTERY:
+            debugln("Entering LOWBATTERY case");
             displayLowBattery(screens);
-            Serial.println("LOWBATTERY function called");
-            break;
+            return;
         case ScreenStates::BLANC:
+            debugln("Entering BLANC case");
             blankScreen(screens);
-            Serial.println("BLANC function called");
-            break;
+            return;
         case ScreenStates::DIAGNOSE:
+            debugln("Entering DIAGNOSE case");
             voltageIndicator(screens);
-            Serial.println("DIAGNOSE function called");
-            break;
-        case ScreenStates::XO:
-            displayCrossCircle(screens);
-            Serial.println("XO function called");
-            break;
-        case ScreenStates::XOENTANG:
-            displayEntangled(screens);
-            Serial.println("XOENTANG function called");
-            break;
+            return;
         case ScreenStates::RESET:
+            debugln("Entering RESET case");
             displayNewDie(screens);
-            Serial.println("RESET function called");
-            break;
-        case ScreenStates::X_STATE:
-            displayCross(screens);
-            Serial.println("X_STATE function called");
-            break;
-        case ScreenStates::O_STATE:
-            displayCircle(screens);
-            Serial.println("O_STATE function called");
-            break;
+            return;
         case ScreenStates::QLAB_LOGO:
+            debugln("Entering QLAB_LOGO case");
             displayQLab(screens);
-            Serial.println("QLAB_LOGO function called");
-            break;
+            return;
         case ScreenStates::UT_LOGO:
+            debugln("Entering UT_LOGO case");
             displayUTlogo(screens);
-            Serial.println("UT_LOGO function called");
-            break;
+            return;
         case ScreenStates::QRCODE:
+            debugln("Entering QRCODE case");
             displayQRcode(screens);
-            Serial.println("QRCode function called");
-            break;
-        default:
-            Serial.println("No specific function for state");
+            return;
+        default: warnln("No valid screen state selected"); return;
     }
 }
-void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, ScreenStates y1, ScreenStates z0, ScreenStates z1) {
+
+void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, ScreenStates y1,
+                           ScreenStates z0, ScreenStates z1) {
     static ScreenStates prevX0 = ScreenStates::BLANC;
     static ScreenStates prevY0 = ScreenStates::BLANC;
     static ScreenStates prevZ0 = ScreenStates::BLANC;
@@ -225,32 +114,32 @@ void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, Sc
     static ScreenStates prevZ1 = ScreenStates::BLANC;
 
     if (x0 != prevX0) {
-        //debug("X0:");
+        // debug("X0:");
         callFunction(x0, screenselections::X0);
         prevX0 = x0;
     }
     if (y0 != prevY0) {
-        //debug("Y0:");
+        // debug("Y0:");
         callFunction(y0, screenselections::Y0);
         prevY0 = y0;
     }
     if (z0 != prevZ0) {
-        //debug("Z0:");
+        // debug("Z0:");
         callFunction(z0, screenselections::Z0);
         prevZ0 = z0;
     }
     if (x1 != prevX1) {
-        //debug("X1:");
+        // debug("X1:");
         callFunction(x1, screenselections::X1);
         prevX1 = x1;
     }
     if (y1 != prevY1) {
-        //debug("Y1:");
+        // debug("Y1:");
         callFunction(y1, screenselections::Y1);
         prevY1 = y1;
     }
     if (z1 != prevZ1) {
-        //debug("Z1:");
+        // debug("Z1:");
         callFunction(z1, screenselections::Z1);
         prevZ1 = z1;
     }
@@ -258,58 +147,40 @@ void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, Sc
 
 void refreshScreens() {
     // set screens, depending of states
-    if (findValues(stateSelf, diceStateSelf, diceNumberSelf, upSideSelf, x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState, z0ReqScreenState, z1ReqScreenState)) {
-        checkAndCallFunctions(x0ReqScreenState, x1ReqScreenState, y0ReqScreenState, y1ReqScreenState, z0ReqScreenState, z1ReqScreenState);
+    if (findValues(stateSelf, diceNumberSelf, upSideSelf, x0ReqScreenState, x1ReqScreenState,
+                   y0ReqScreenState, y1ReqScreenState, z0ReqScreenState, z1ReqScreenState)) {
+        checkAndCallFunctions(x0ReqScreenState, x1ReqScreenState, y0ReqScreenState,
+                              y1ReqScreenState, z0ReqScreenState, z1ReqScreenState);
     } else {
         debugln("no match found");
         // No match found, handle accordingly
     }
 }
-auto selectOneToSix() -> DiceNumbers {
 
-    //int randomNumber = (int)ECCX08.random(6) + 1;
+auto selectOneToSix() -> DiceNumbers {
     uint8_t randomNumber = generateDiceRoll();
-    debug("Select one to six. Randomnumber: ");
-    debugln(randomNumber);
-    switch (randomNumber) {  //dit kan vast handiger
-        case 1:
-            return DiceNumbers::ONE;
-        case 2:
-            return DiceNumbers::TWO;
-        case 3:
-            return DiceNumbers::THREE;
-        case 4:
-            return DiceNumbers::FOUR;
-        case 5:
-            return DiceNumbers::FIVE;
-        case 6:
-            return DiceNumbers::SIX;
-        default:
-            return DiceNumbers::ONE;
+    debugf("Select one to six. Randomnumber: %d\n", randomNumber);
+    if (randomNumber >= DICE_MIN && randomNumber <= DICE_MAX) {
+        return static_cast<DiceNumbers>(randomNumber);
     }
+    warnln("Random number out of range, returning ONE");
     return DiceNumbers::ONE;
 }
+
 auto selectOppositeOneToSix(DiceNumbers diceNumberTop) -> DiceNumbers {
-    debugln("select opposite number");
-    switch (diceNumberTop) {  //select the opposite value
-        case DiceNumbers::ONE:
-            return DiceNumbers::SIX;
-            break;
-        case DiceNumbers::TWO:
-            return DiceNumbers::FIVE;
-            break;
-        case DiceNumbers::THREE:
-            return DiceNumbers::FOUR;
-            break;
-        case DiceNumbers::FOUR:
-            return DiceNumbers::THREE;
-            break;
-        case DiceNumbers::FIVE:
-            return DiceNumbers::TWO;
-            break;
-        case DiceNumbers::SIX:
-            return DiceNumbers::ONE;
-            break;
+    if (diceNumberTop == DiceNumbers::NONE) {
+        warnln("selectOppositeOneToSix called with NONE, returning ONE");
+        return DiceNumbers::ONE;
     }
-    return DiceNumbers::ONE;
+
+    if (diceNumberTop < DiceNumbers::ONE || diceNumberTop > DiceNumbers::SIX) {
+        warnln("selectOppositeOneToSix called with invalid number, returning ONE");
+        return DiceNumbers::ONE;
+    }
+
+    const int oppositeSum    = 7; // In a standard die, opposite sides sum to 7
+    const int oppositeNumber = oppositeSum - static_cast<int>(diceNumberTop);
+
+    debugf("Opposite number of %d is %d\n", static_cast<int>(diceNumberTop), oppositeNumber);
+    return static_cast<DiceNumbers>(oppositeNumber);
 }
