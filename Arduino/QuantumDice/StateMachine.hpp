@@ -45,6 +45,8 @@ enum class EntanglementState : uint8_t {
     POST_ENTANGLEMENT, // State after entanglement, indicating that the entanglement partner has
                        // been rolled and that we need to roll opposite if in the same measurement
                        // basis
+    TELEPORTED,        // State after receiving a teleported observed state - must show that value
+                       // if measured on same axis, otherwise random
 };
 
 struct State {
@@ -82,6 +84,10 @@ enum class Trigger : uint8_t {
     ENTANGLE_CONFIRM,
     ENTANGLE_STOP,
     MEASUREMENT_RECEIVED,
+    // Teleportation triggers
+    TELEPORT_INITIATED,
+    TELEPORT_CONFIRMED,
+    TELEPORT_RECEIVED,
     // Measurement triggers
     MEASURE,
     MEASURE_FAIL,
@@ -151,7 +157,13 @@ class StateMachine {
                                  UpSide upSide, MeasuredAxises measureAxis);
     static void sendEntangleRequest(uint8_t *target);
     static void sendEntanglementConfirm(uint8_t *target);
-    static void sendStopEntanglement(uint8_t *target);
+    static void sendEntangleDenied(uint8_t *target);
+    static void sendTeleportRequest(uint8_t *target_m, uint8_t *target_b);
+    static void sendTeleportConfirm(uint8_t *target);
+    static void sendTeleportPayload(uint8_t *target, State state, DiceNumbers diceNumber,
+                                    UpSide upSide, MeasuredAxises measureAxis,
+                                    uint8_t *entangled_peer, uint16_t color);
+    static void sendTeleportPartner(uint8_t *target_n, uint8_t *new_partner_b);
 
     IMUSensor *_imuSensor;
     State      currentState;
@@ -168,11 +180,18 @@ class StateMachine {
     };
 
     static const std::map<State, StateFunction>  stateFunctions;
-    static const std::array<StateTransition, 29> stateTransitions;
+    static const std::array<StateTransition, 37> stateTransitions;
 
     // Partner's measurement info (for post-entanglement state)
     MeasuredAxises partnerMeasurementAxis;
     DiceNumbers    partnerDiceNumber;
+
+    // Teleported measurement info (for teleported state)
+    MeasuredAxises teleportedMeasurementAxis;
+    DiceNumbers    teleportedDiceNumber;
+
+    // Current entanglement color (RGB565)
+    uint16_t entanglement_color;
 };
 
 #endif // STATEMACHINE_H

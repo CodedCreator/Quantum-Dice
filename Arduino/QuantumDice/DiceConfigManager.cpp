@@ -2,21 +2,23 @@
  * DiceConfigManager - Implementation
  */
 
-#include <WiFi.h>
-#include <LittleFS.h>
-
 #include "DiceConfigManager.hpp"
+
 #include "defines.hpp"
+
+#include <LittleFS.h>
+#include <WiFi.h>
+
 
 // Constructor
 DiceConfigManager::DiceConfigManager() : _verbose(false) {
     _lastError[0] = '\0';
-    strcpy((char *) _configPath, "/config.txt");
+    strcpy((char *)_configPath, "/config.txt");
     initDefaultConfig();
 }
 
 // Initialize LittleFS and optionally load config
-auto DiceConfigManager::begin(const char* configPath, bool formatOnFail) -> bool {
+auto DiceConfigManager::begin(const char *configPath, bool formatOnFail) -> bool {
     if (!LittleFS.begin(formatOnFail)) {
         setError("LittleFS mount failed");
         return false;
@@ -32,22 +34,22 @@ auto DiceConfigManager::begin(const char* configPath, bool formatOnFail) -> bool
             infoln("No config path specified, searching for *_config.txt...");
         }
 
-        if (findConfigFile((char *) _configPath, sizeof(_configPath))) {
+        if (findConfigFile((char *)_configPath, sizeof(_configPath))) {
             if (_verbose) {
-                infof("Auto-detected config file: %s\n", (char *) _configPath);
+                infof("Auto-detected config file: %s\n", (char *)_configPath);
             }
         } else {
             // No config file found or multiple found
             if (_verbose) {
                 infoln("No unique config file found, using defaults");
             }
-            strcpy((char *) _configPath, "/config.txt"); // Set default for save operations
+            strcpy((char *)_configPath, "/config.txt"); // Set default for save operations
             setDefaults();
             return true; // Not a critical error
         }
     } else {
         // Explicit path provided
-        strncpy((char *) _configPath, configPath, sizeof(_configPath) - 1);
+        strncpy((char *)_configPath, configPath, sizeof(_configPath) - 1);
         _configPath[sizeof(_configPath) - 1] = '\0';
     }
 
@@ -65,10 +67,10 @@ auto DiceConfigManager::begin(const char* configPath, bool formatOnFail) -> bool
 
 // Load configuration from file
 auto DiceConfigManager::load() -> bool {
-    return load((char *) _configPath);
+    return load((char *)_configPath);
 }
 
-auto DiceConfigManager::load(const char* filename) -> bool {
+auto DiceConfigManager::load(const char *filename) -> bool {
     File file = LittleFS.open(filename, "r");
     if (!file) {
         setError("Failed to open config file");
@@ -76,11 +78,11 @@ auto DiceConfigManager::load(const char* filename) -> bool {
     }
 
     char line[128];
-    int lineNum = 0;
+    int  lineNum = 0;
     bool success = true;
 
     while (file.available()) {
-        int len = file.readBytesUntil('\n', line, sizeof(line) - 1);
+        int len   = file.readBytesUntil('\n', line, sizeof(line) - 1);
         line[len] = '\0';
         lineNum++;
 
@@ -89,7 +91,7 @@ auto DiceConfigManager::load(const char* filename) -> bool {
             line[len - 1] = '\0';
         }
 
-        trim((char *) line);
+        trim((char *)line);
 
         // Skip empty lines and comments
         if (line[0] == '\0' || line[0] == '#') {
@@ -97,7 +99,7 @@ auto DiceConfigManager::load(const char* filename) -> bool {
         }
 
         // Find the '=' separator
-        char* separator = strchr((char *) line, '=');
+        char *separator = strchr((char *)line, '=');
         if (separator == nullptr) {
             if (_verbose) {
                 infof("Line %d: Invalid format (no '=')\n", lineNum);
@@ -106,65 +108,61 @@ auto DiceConfigManager::load(const char* filename) -> bool {
         }
 
         // Split into key and value
-        *separator = '\0';
-        char* key = (char *) line;
-        char* value = separator + 1;
+        *separator  = '\0';
+        char *key   = (char *)line;
+        char *value = separator + 1;
 
         trim(key);
 
         // Strip inline comments from value (everything after #)
-        char* comment = strchr(value, '#');
+        char *comment = strchr(value, '#');
         if (comment != nullptr) {
-            *comment = '\0';  // Terminate string at comment
+            *comment = '\0'; // Terminate string at comment
         }
 
         trim(value);
 
         // Parse based on key
         if (strcmp(key, "diceId") == 0) {
-            strncpy((char *) _config.diceId, value, sizeof(_config.diceId) - 1);
+            strncpy((char *)_config.diceId, value, sizeof(_config.diceId) - 1);
             _config.diceId[sizeof(_config.diceId) - 1] = '\0';
-        }
-        else if (strcmp(key, "x_background") == 0) {
+        } else if (strcmp(key, "x_background") == 0) {
             _config.x_background = (uint16_t)strtoul(value, nullptr, 0);
-        }
-        else if (strcmp(key, "y_background") == 0) {
+        } else if (strcmp(key, "y_background") == 0) {
             _config.y_background = (uint16_t)strtoul(value, nullptr, 0);
-        }
-        else if (strcmp(key, "z_background") == 0) {
+        } else if (strcmp(key, "z_background") == 0) {
             _config.z_background = (uint16_t)strtoul(value, nullptr, 0);
-        }
-        else if (strcmp(key, "entang_ab1_color") == 0) {
-            _config.entang_ab1_color = (uint16_t)strtoul(value, nullptr, 0);
-        }
-        else if (strcmp(key, "entang_ab2_color") == 0) {
-            _config.entang_ab2_color = (uint16_t)strtoul(value, nullptr, 0);
-        }
-        else if (strcmp(key, "rssiLimit") == 0) {
-            _config.rssiLimit = (int8_t) strtol(value, nullptr, 0);
-        }
-        else if (strcmp(key, "isSMD") == 0) {
+        } else if (strcmp(key, "entang_colors") == 0) {
+            // Parse comma-separated color values
+            _config.entang_colors_count = 0;
+            char *token                 = strtok(value, ",");
+            while (token != nullptr && _config.entang_colors_count < 8) {
+                trim(token);
+                _config.entang_colors[_config.entang_colors_count]
+                  = (uint16_t)strtoul(token, nullptr, 0);
+                _config.entang_colors_count++;
+                token = strtok(nullptr, ",");
+            }
+            if (_verbose && _config.entang_colors_count > 0) {
+                infof("Loaded %d entanglement colors\n", _config.entang_colors_count);
+            }
+        } else if (strcmp(key, "rssiLimit") == 0) {
+            _config.rssiLimit = (int8_t)strtol(value, nullptr, 0);
+        } else if (strcmp(key, "isSMD") == 0) {
             _config.isSMD = parseBool(value);
-        }
-        else if (strcmp(key, "isNano") == 0) {
+        } else if (strcmp(key, "isNano") == 0) {
             _config.isNano = parseBool(value);
-        }
-        else if (strcmp(key, "alwaysSeven") == 0) {
+        } else if (strcmp(key, "alwaysSeven") == 0) {
             _config.alwaysSeven = parseBool(value);
-        }
-        else if (strcmp(key, "randomSwitchPoint") == 0) {
-            _config.randomSwitchPoint = (uint8_t) strtol(value, nullptr, 0);
-        }
-        else if (strcmp(key, "tumbleConstant") == 0) {
+        } else if (strcmp(key, "randomSwitchPoint") == 0) {
+            _config.randomSwitchPoint = (uint8_t)strtol(value, nullptr, 0);
+        } else if (strcmp(key, "tumbleConstant") == 0) {
             _config.tumbleConstant = strtod(value, nullptr);
-        }
-        else if (strcmp(key, "deepSleepTimeout") == 0) {
+        } else if (strcmp(key, "deepSleepTimeout") == 0) {
             _config.deepSleepTimeout = strtoul(value, nullptr, 0);
-        }
-        else if (strcmp(key, "checksum") == 0) {
-            _config.checksum = (uint8_t) strtol(value, nullptr, 0);
-        }
-        else {
+        } else if (strcmp(key, "checksum") == 0) {
+            _config.checksum = (uint8_t)strtol(value, nullptr, 0);
+        } else {
             if (_verbose) {
                 infof("Line %d: Unknown key '%s'\n", lineNum, key);
             }
@@ -193,10 +191,10 @@ auto DiceConfigManager::load(const char* filename) -> bool {
 
 // Save configuration to file
 auto DiceConfigManager::save() -> bool {
-    return save((char *) _configPath);
+    return save((char *)_configPath);
 }
 
-auto DiceConfigManager::save(const char* filename) -> bool {
+auto DiceConfigManager::save(const char *filename) -> bool {
     // Calculate checksum before saving
     calculateChecksum(_config);
 
@@ -225,8 +223,16 @@ auto DiceConfigManager::save(const char* filename) -> bool {
     file.printf("x_background=%u\n", _config.x_background);
     file.printf("y_background=%u\n", _config.y_background);
     file.printf("z_background=%u\n", _config.z_background);
-    file.printf("entang_ab1_color=%u\n", _config.entang_ab1_color);
-    file.printf("entang_ab2_color=%u\n", _config.entang_ab2_color);
+
+    // Write entanglement colors as comma-separated list
+    file.print("entang_colors=");
+    for (uint8_t i = 0; i < _config.entang_colors_count; i++) {
+        file.printf("%u", _config.entang_colors[i]);
+        if (i < _config.entang_colors_count - 1) {
+            file.print(",");
+        }
+    }
+    file.println();
     file.println();
 
     // RSSI Settings
@@ -274,7 +280,7 @@ auto DiceConfigManager::validate() -> bool {
     bool valid = true;
 
     // Check dice ID is not empty
-    if (strlen((char *) _config.diceId) == 0) {
+    if (strlen((char *)_config.diceId) == 0) {
         if (_verbose) {
             infoln("Validation error: diceId is empty");
         }
@@ -309,18 +315,18 @@ auto DiceConfigManager::validate() -> bool {
 }
 
 // Get configuration
-auto DiceConfigManager::getConfig() -> DiceConfig& {
+auto DiceConfigManager::getConfig() -> DiceConfig & {
     return _config;
 }
 
 // Set configuration
-void DiceConfigManager::setConfig(const DiceConfig& newConfig) {
+void DiceConfigManager::setConfig(const DiceConfig &newConfig) {
     _config = newConfig;
 }
 
 // Individual setters
-void DiceConfigManager::setDiceId(const char* id) {
-    strncpy((char *) _config.diceId, id, sizeof(_config.diceId) - 1);
+void DiceConfigManager::setDiceId(const char *id) {
+    strncpy((char *)_config.diceId, id, sizeof(_config.diceId) - 1);
     _config.diceId[sizeof(_config.diceId) - 1] = '\0';
 }
 
@@ -347,8 +353,14 @@ void DiceConfigManager::printConfig() {
     infof("X Background: 0x%04X (%u)\n", _config.x_background, _config.x_background);
     infof("Y Background: 0x%04X (%u)\n", _config.y_background, _config.y_background);
     infof("Z Background: 0x%04X (%u)\n", _config.z_background, _config.z_background);
-    infof("Entangle AB1 Color: 0x%04X (%u)\n", _config.entang_ab1_color, _config.entang_ab1_color);
-    infof("Entangle AB2 Color: 0x%04X (%u)\n", _config.entang_ab2_color, _config.entang_ab2_color);
+    infof("Entangle Colors (%d): ", _config.entang_colors_count);
+    for (uint8_t i = 0; i < _config.entang_colors_count; i++) {
+        infof("0x%04X", _config.entang_colors[i]);
+        if (i < _config.entang_colors_count - 1) {
+            info(", ");
+        }
+    }
+    infoln("");
     infof("RSSI Limit: %d dBm\n", _config.rssiLimit);
     infof("Is SMD: %s\n", _config.isSMD ? "true" : "false");
     infof("Is Nano: %s\n", _config.isNano ? "true" : "false");
@@ -360,32 +372,31 @@ void DiceConfigManager::printConfig() {
     infoln("==========================");
 }
 
-void DiceConfigManager::printMacAddress(const uint8_t* mac) {
-    infof("%02X:%02X:%02X:%02X:%02X:%02X\n",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+void DiceConfigManager::printMacAddress(const uint8_t *mac) {
+    infof("%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
-auto DiceConfigManager::macToString(const uint8_t* mac) -> String {
+auto DiceConfigManager::macToString(const uint8_t *mac) -> String {
     char buffer[18];
-    auto res = snprintf((char *) buffer, sizeof(buffer), "%02X:%02X:%02X:%02X:%02X:%02X",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    return {(char *) buffer};
+    auto res = snprintf((char *)buffer, sizeof(buffer), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0],
+                        mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return {(char *)buffer};
 }
 
-auto DiceConfigManager::getLastError() -> const char* {
-    return (char *) _lastError;
+auto DiceConfigManager::getLastError() -> const char * {
+    return (char *)_lastError;
 }
 
 void DiceConfigManager::setVerbose(bool enabled) {
     _verbose = enabled;
 }
 
-auto DiceConfigManager::getConfigPath() -> const char* {
-    return (char *) _configPath;
+auto DiceConfigManager::getConfigPath() -> const char * {
+    return (char *)_configPath;
 }
 
 // Private methods
-auto DiceConfigManager::findConfigFile(char* foundPath, size_t maxLen) -> bool {
+auto DiceConfigManager::findConfigFile(char *foundPath, size_t maxLen) -> bool {
     File root = LittleFS.open("/");
     if (!root) {
         if (_verbose) {
@@ -401,7 +412,7 @@ auto DiceConfigManager::findConfigFile(char* foundPath, size_t maxLen) -> bool {
         return false;
     }
 
-    int matchCount = 0;
+    int  matchCount     = 0;
     char firstMatch[64] = {0};
 
     File file = root.openNextFile();
@@ -418,7 +429,7 @@ auto DiceConfigManager::findConfigFile(char* foundPath, size_t maxLen) -> bool {
 
             // Store first match
             if (matchCount == 1) {
-                strncpy((char *) firstMatch, filename.c_str(), sizeof(firstMatch) - 1);
+                strncpy((char *)firstMatch, filename.c_str(), sizeof(firstMatch) - 1);
                 firstMatch[sizeof(firstMatch) - 1] = '\0';
             }
         }
@@ -432,13 +443,14 @@ auto DiceConfigManager::findConfigFile(char* foundPath, size_t maxLen) -> bool {
     if (matchCount == 1) {
         // Ensure path starts with /
         if (firstMatch[0] != '/') {
-            auto res = snprintf(foundPath, maxLen, "/%s", (char *) firstMatch);
+            auto res = snprintf(foundPath, maxLen, "/%s", (char *)firstMatch);
         } else {
-            strncpy(foundPath, (char *) firstMatch, maxLen - 1);
+            strncpy(foundPath, (char *)firstMatch, maxLen - 1);
             foundPath[maxLen - 1] = '\0';
         }
         return true;
-    } if (matchCount == 0) {
+    }
+    if (matchCount == 0) {
         setError("No *_config.txt file found");
         if (_verbose) {
             infoln("No files matching *_config.txt pattern found");
@@ -453,11 +465,11 @@ auto DiceConfigManager::findConfigFile(char* foundPath, size_t maxLen) -> bool {
     return false;
 }
 
-auto DiceConfigManager::parseMacAddress(const char* str, uint8_t* mac) -> bool {
+auto DiceConfigManager::parseMacAddress(const char *str, uint8_t *mac) -> bool {
     int values[6];
-    if (sscanf(str, "%x:%x:%x:%x:%x:%x",
-                &values[0], &values[1], &values[2],
-                &values[3], &values[4], &values[5]) == 6) {
+    if (sscanf(str, "%x:%x:%x:%x:%x:%x", &values[0], &values[1], &values[2], &values[3], &values[4],
+               &values[5])
+        == 6) {
         for (int i = 0; i < 6; i++) {
             mac[i] = (uint8_t)values[i];
         }
@@ -466,13 +478,13 @@ auto DiceConfigManager::parseMacAddress(const char* str, uint8_t* mac) -> bool {
     return false;
 }
 
-auto DiceConfigManager::parseBool(const char* str) -> bool {
+auto DiceConfigManager::parseBool(const char *str) -> bool {
     return strcasecmp(str, "true") == 0 || strcmp(str, "1") == 0;
 }
 
-void DiceConfigManager::trim(char* str) {
+void DiceConfigManager::trim(char *str) {
     // Trim leading space
-    char* start = str;
+    char *start = str;
     while (isspace((unsigned char)*start) != 0) {
         start++;
     }
@@ -482,15 +494,15 @@ void DiceConfigManager::trim(char* str) {
     }
 
     // Trim trailing space
-    char* end = str + strlen(str) - 1;
+    char *end = str + strlen(str) - 1;
     while (end > str && (isspace((unsigned char)*end) != 0)) {
         end--;
     }
     end[1] = '\0';
 }
 
-void DiceConfigManager::calculateChecksum(DiceConfig& config) {
-    auto* ptr = (uint8_t*) &config;
+void DiceConfigManager::calculateChecksum(DiceConfig &config) {
+    auto   *ptr = (uint8_t *)&config;
     uint8_t sum = 0;
 
     // XOR all bytes except the checksum field itself
@@ -501,15 +513,15 @@ void DiceConfigManager::calculateChecksum(DiceConfig& config) {
     config.checksum = sum;
 }
 
-auto DiceConfigManager::validateChecksum(const DiceConfig& config) -> bool {
-    DiceConfig temp = config;
-    uint8_t originalChecksum = temp.checksum;
+auto DiceConfigManager::validateChecksum(const DiceConfig &config) -> bool {
+    DiceConfig temp             = config;
+    uint8_t    originalChecksum = temp.checksum;
     calculateChecksum(temp);
     return temp.checksum == originalChecksum;
 }
 
-void DiceConfigManager::setError(const char* error) {
-    strncpy((char *) _lastError, error, sizeof(_lastError) - 1);
+void DiceConfigManager::setError(const char *error) {
+    strncpy((char *)_lastError, error, sizeof(_lastError) - 1);
     _lastError[sizeof(_lastError) - 1] = '\0';
     if (_verbose) {
         infof("Error: %s\n", error);
@@ -518,27 +530,32 @@ void DiceConfigManager::setError(const char* error) {
 
 void DiceConfigManager::initDefaultConfig() {
     // Default values
-    strcpy((char *) _config.diceId, "DEFAULT");
+    strcpy((char *)_config.diceId, "DEFAULT");
 
     // Default colors (RGB565)
-    _config.x_background = 0x0;      // Black
-    _config.y_background = 0x0;      // Black
-    _config.z_background = 0x0;      // Black
-    _config.entang_ab1_color = 0xFFE0;  // Yellow
-    _config.entang_ab2_color = 0x07E0;  // Green
+    _config.x_background = 0x0; // Black
+    _config.y_background = 0x0; // Black
+    _config.z_background = 0x0; // Black
+
+    // Default entanglement colors: Yellow, Green, Cyan, Magenta
+    _config.entang_colors[0]    = 0xFFE0; // Yellow
+    _config.entang_colors[1]    = 0x07E0; // Green
+    _config.entang_colors[2]    = 0x07FF; // Cyan
+    _config.entang_colors[3]    = 0xF81F; // Magenta
+    _config.entang_colors_count = 4;
 
     // Default RSSI
     _config.rssiLimit = -35;
 
     // Default hardware config
-    _config.isSMD = true;
-    _config.isNano = false;
+    _config.isSMD       = true;
+    _config.isNano      = false;
     _config.alwaysSeven = false;
 
     // Default operational parameters
     _config.randomSwitchPoint = 50;
-    _config.tumbleConstant = 45; //=cos(45)
-    _config.deepSleepTimeout = 300000;  // 5 minutes
+    _config.tumbleConstant    = 45;     //=cos(45)
+    _config.deepSleepTimeout  = 300000; // 5 minutes
 
     // Checksum (will be calculated on save)
     _config.checksum = 0;
@@ -574,13 +591,19 @@ auto loadGlobalConfig(bool verbose) -> bool {
 
 void printGlobalConfig() {
     infoln("=== Global Configuration ===");
-    infof("Dice ID: %s\n", (char *) currentConfig.diceId);
+    infof("Dice ID: %s\n", (char *)currentConfig.diceId);
 
     infof("X Background: 0x%04X (%u)\n", currentConfig.x_background, currentConfig.x_background);
     infof("Y Background: 0x%04X (%u)\n", currentConfig.y_background, currentConfig.y_background);
     infof("Z Background: 0x%04X (%u)\n", currentConfig.z_background, currentConfig.z_background);
-    infof("Entangle AB1 Color: 0x%04X (%u)\n", currentConfig.entang_ab1_color, currentConfig.entang_ab1_color);
-    infof("Entangle AB2 Color: 0x%04X (%u)\n", currentConfig.entang_ab2_color, currentConfig.entang_ab2_color);
+    infof("Entangle Colors (%d): ", currentConfig.entang_colors_count);
+    for (uint8_t i = 0; i < currentConfig.entang_colors_count; i++) {
+        infof("0x%04X", currentConfig.entang_colors[i]);
+        if (i < currentConfig.entang_colors_count - 1) {
+            info(", ");
+        }
+    }
+    infoln("");
 
     infof("RSSI Limit: %d dBm\n", currentConfig.rssiLimit);
     infof("Is SMD: %s\n", currentConfig.isSMD ? "true" : "false");
@@ -618,19 +641,18 @@ auto ensureLittleFSAndConfig(bool verbose) -> bool {
         infoln("Mounting LittleFS...");
     }
 
-    if (!LittleFS.begin(true)) {  // true = format if mount fails
+    if (!LittleFS.begin(true)) { // true = format if mount fails
         infoln("Failed to mount/format LittleFS!");
         return false;
     }
 
     if (verbose) {
         infoln("LittleFS mounted successfully");
-        infof("Total: %u bytes, Used: %u bytes\n",
-                LittleFS.totalBytes(), LittleFS.usedBytes());
+        infof("Total: %u bytes, Used: %u bytes\n", LittleFS.totalBytes(), LittleFS.usedBytes());
     }
 
     // Step 2: Check if any config file exists
-    bool configExists = false;
+    bool   configExists    = false;
     String foundConfigPath = "";
 
     File root = LittleFS.open("/");
@@ -639,7 +661,7 @@ auto ensureLittleFSAndConfig(bool verbose) -> bool {
         while (file) {
             String filename = String(file.name());
             if (filename.endsWith("_config.txt") || filename == "/config.txt") {
-                configExists = true;
+                configExists    = true;
                 foundConfigPath = filename;
                 if (verbose) {
                     infof("Found existing config file: %s\n", filename.c_str());
@@ -669,7 +691,7 @@ auto ensureLittleFSAndConfig(bool verbose) -> bool {
     return loadGlobalConfig(verbose);
 }
 
-auto createDefaultConfigFile(const char* filename, bool verbose) -> bool {
+auto createDefaultConfigFile(const char *filename, bool verbose) -> bool {
     File file = LittleFS.open(filename, "w");
     if (!file) {
         if (verbose) {
@@ -696,11 +718,10 @@ auto createDefaultConfigFile(const char* filename, bool verbose) -> bool {
     file.println("deviceB2_mac=00:00:00:00:00:00");
     file.println();
     file.println("# Display Colors (RGB565) - defaults work fine");
-    file.println("x_background=63488");
-    file.println("y_background=2016");
-    file.println("z_background=31");
-    file.println("entang_ab1_color=65535");
-    file.println("entang_ab2_color=0");
+    file.println("x_background=0");
+    file.println("y_background=0");
+    file.println("z_background=0");
+    file.println("entang_colors=65504,2016,2047,63519");
     file.println();
     file.println("# RSSI Settings");
     file.println("rssiLimit=-70");
@@ -729,7 +750,7 @@ auto createDefaultConfigFile(const char* filename, bool verbose) -> bool {
 
 auto isInSetupMode() -> bool {
     // Check if using default ID
-    return strcmp((char *) currentConfig.diceId, "DEFAULT") == 0;
+    return strcmp((char *)currentConfig.diceId, "DEFAULT") == 0;
 }
 
 // ============================================================================
@@ -737,8 +758,8 @@ auto isInSetupMode() -> bool {
 // ============================================================================
 
 void setHardwareDefaults() {
-    currentConfig.isNano = false;  // DEVKIT
-    currentConfig.isSMD = true;    // SMD mounting
+    currentConfig.isNano = false; // DEVKIT
+    currentConfig.isSMD  = true;  // SMD mounting
 }
 
 void enterSetupMode() {
@@ -756,8 +777,8 @@ void enterSetupMode() {
     infoln("═══════════════════════════════════════");
     infoln("DEVICE INFORMATION:");
     infoln("═══════════════════════════════════════");
-    infof("  MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    infof("  MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4],
+          mac[5]);
     infof("  Hardware: %s\n", currentConfig.isNano ? "NANO" : "DEVKIT");
     infof("  Mounting: %s\n", currentConfig.isSMD ? "SMD" : "HDR");
     infoln("");
@@ -778,8 +799,8 @@ void enterSetupMode() {
     infoln("   └─> Name: YOURNAME_config.txt");
     infoln("   └─> Must contain:");
     infoln("       • diceId=YOURNAME");
-    infof("       • deviceA_mac=%02X:%02X:%02X:%02X:%02X:%02X (this device or peer)\n",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    infof("       • deviceA_mac=%02X:%02X:%02X:%02X:%02X:%02X (this device or peer)\n", mac[0],
+          mac[1], mac[2], mac[3], mac[4], mac[5]);
     infoln("       • deviceB1_mac=XX:XX:XX:XX:XX:XX");
     infoln("       • deviceB2_mac=XX:XX:XX:XX:XX:XX");
     infoln("       • Other settings (see template)");
@@ -793,10 +814,10 @@ void enterSetupMode() {
     infoln("═══════════════════════════════════════");
 
     // Idle loop with periodic reminders
-    unsigned long lastReminder = 0;
-    int reminderCount = 0;
+    unsigned long lastReminder  = 0;
+    int           reminderCount = 0;
 
-    while(true) {
+    while (true) {
         // Print reminder every 30 seconds
         if (millis() - lastReminder > 30000) {
             reminderCount++;

@@ -1,13 +1,14 @@
 #ifndef SCREENDETERMINATOR_NEW_H_
 #define SCREENDETERMINATOR_NEW_H_
 
+#include "defines.hpp"
 #include "ScreenStateDefs.hpp"
 #include "StateMachine.hpp"
-#include "defines.hpp"
 
 /**
  * Dynamic screen determination based on current state
- * Instead of a hardcoded truth table, we
+ * Instead of a hardcoded truth table,
+ * we
  * compute what to display
  */
 
@@ -19,7 +20,8 @@ struct ScreenConfiguration {
 /**
  * Determine which screens to show based on current dice state
  */
-inline auto determineScreens(State state, DiceNumbers diceNumber, UpSide upSide) -> ScreenConfiguration {
+inline auto determineScreens(State state, DiceNumbers diceNumber, UpSide upSide)
+  -> ScreenConfiguration {
     ScreenConfiguration config;
 
     // === CLASSIC MODE ===
@@ -48,12 +50,11 @@ inline auto determineScreens(State state, DiceNumbers diceNumber, UpSide upSide)
         // Show superposition based on entanglement state
         ScreenStates throwingScreen;
 
-        if (state.entanglementState == EntanglementState::ENTANGLED
-            || state.entanglementState == EntanglementState::ENTANGLE_REQUESTED) {
+        if (state.entanglementState == EntanglementState::ENTANGLED) {
             // Entangled: show special entangled superposition
             throwingScreen = ScreenStates::MIX1TO6_ENTANGLED;
         } else {
-            // Pure superposition
+            // Pure superposition (including ENTANGLE_REQUESTED)
             throwingScreen = ScreenStates::MIX1TO6;
         }
 
@@ -65,12 +66,11 @@ inline auto determineScreens(State state, DiceNumbers diceNumber, UpSide upSide)
     if (state.throwState == ThrowState::IDLE) {
         ScreenStates idleScreen;
 
-        if (state.entanglementState == EntanglementState::ENTANGLED
-            || state.entanglementState == EntanglementState::ENTANGLE_REQUESTED) {
+        if (state.entanglementState == EntanglementState::ENTANGLED) {
             // Entangled: show entangled superposition
             idleScreen = ScreenStates::MIX1TO6_ENTANGLED;
         } else {
-            // Pure quantum: show superposition
+            // Pure quantum: show superposition (including ENTANGLE_REQUESTED)
             idleScreen = ScreenStates::MIX1TO6;
         }
 
@@ -124,12 +124,14 @@ inline auto determineScreens(State state, DiceNumbers diceNumber, UpSide upSide)
 /**
  * Main function to refresh all screens based on current state
  * This replaces the old
+ *
  * findValues() function
  */
 inline auto determineScreenStates(State state, DiceNumbers diceNumber, UpSide upSide,
                                   ScreenStates &x0ScreenState, ScreenStates &x1ScreenState,
                                   ScreenStates &y0ScreenState, ScreenStates &y1ScreenState,
-                                  ScreenStates &z0ScreenState, ScreenStates &z1ScreenState) -> bool {
+                                  ScreenStates &z0ScreenState, ScreenStates &z1ScreenState)
+  -> bool {
     ScreenConfiguration config = determineScreens(state, diceNumber, upSide);
 
     x0ScreenState = config.x0;
