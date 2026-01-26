@@ -1,36 +1,38 @@
-name: Clang-Tidy Lint
-
-on:
-  pull_request:
-    branches:
-      - main
-      - develop
-
+name: Lint code using clang-tidy
+on: pull_request
 jobs:
-  clang-tidy:
+  lint:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install clang-tidy
+      - name: Update apt-get
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-tidy python3
 
-      - name: Make setup_deps script executable
-        run: chmod +x scripts/setup_deps.sh
-
-      - name: Install dependencies
+      - name: Install arduino-cli
         run: |
-          bash scripts/setup_deps.sh
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
 
-      - name: Make lint script executable
-        run: chmod +x scripts/lint.sh
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get install -y clang-tidy
+
+      - name: Install python3
+        run: |
+          sudo apt-get install -y python3
+
+      - name: Generate compilation database
+        run: |
+          arduino-cli compile --jobs 0 --profile esp32s3_dev_module --build-path Arduino/QuantumDice/build --only-compilation-database Arduino/QuantumDice
+
+      - name: Clean compilation database
+        run: |
+          python3 scripts/clean_compile_commands.py Arduino/QuantumDice/build/compile_commands.json
 
       - name: Run clang-tidy
         run: |
-          bash scripts/lint.sh
+          git ls-files | grep -E '\.(cc|cpp|cxx|ino)$' | grep -v -E 'QuantumDiceInit|build/|ImageLibrary/' | xargs -r -P 4 clang-tidy -p Arduino/QuantumDice/build

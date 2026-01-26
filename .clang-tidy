@@ -2,7 +2,8 @@
 ---
 Checks:            'bugprone-*, cert-*, cppcoreguidelines-*, misc-*, modernize-*, performance-*, readability-*'
 WarningsAsErrors:  'bugprone-*, cert-*'
-HeaderFileExtensions:         ['h', 'hh', 'hpp', 'hxx']
-ImplementationFileExtensions: ['c', 'cc', 'cpp', 'cxx', 'ino']
-HeaderFilterRegex: '.*'
+HeaderFileExtensions:         ['hh', 'hpp', 'hxx']
+ImplementationFileExtensions: ['cc', 'cpp', 'cxx', 'ino']
+HeaderFilterRegex: '^Arduino/QuantumDice/'
 FormatStyle:       file
+SystemHeaders:     false
