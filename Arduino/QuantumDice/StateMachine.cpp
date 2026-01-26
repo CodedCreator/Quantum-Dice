@@ -333,10 +333,10 @@ const std::array<StateTransition, 37> StateMachine::stateTransitions = {
 
    // === TELEPORTATION TRANSITIONS ===
    // M initiates teleport (any state -> PURE after sending payload)
-   StateTransition{Mode::QUANTUM, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
+   StateTransition{Mode::QUANTUM, std::nullopt, std::nullopt, ThrowState::IDLE, std::nullopt,
                    EntanglementState::PURE, Trigger::TELEPORT_INITIATED},
    // A confirms teleport (ENTANGLED -> PURE after confirming)
-   StateTransition{Mode::QUANTUM, std::nullopt, std::nullopt, std::nullopt,
+   StateTransition{Mode::QUANTUM, std::nullopt, std::nullopt, ThrowState::IDLE,
                    EntanglementState::ENTANGLED, EntanglementState::PURE,
                    Trigger::TELEPORT_CONFIRMED},
    // B receives teleport from M that was PURE
@@ -645,7 +645,14 @@ void StateMachine::update() {
                         memset(this->current_peer, 0xFF, 6);
                     }
 
-                    // M goes to PURE state after teleportation
+                    // M goes to quantum idle state (full superposition) after teleportation
+                    // Clear measurement state and memoization
+                    diceNumberSelf  = DiceNumbers::NONE;
+                    upSideSelf      = UpSide::NONE;
+                    measureAxisSelf = MeasuredAxises::UNDEFINED;
+                    lastRollBasis   = MeasuredAxises::UNDEFINED;
+                    lastRollNumber  = DiceNumbers::NONE;
+                    
                     changeState(Trigger::TELEPORT_INITIATED);
                 }
                 break;
@@ -658,7 +665,14 @@ void StateMachine::update() {
                 memset(this->current_peer, 0xFF, 6);
                 memset(this->next_peer, 0xFF, 6);
 
-                // A goes to PURE state
+                // A goes to quantum idle state (full superposition)
+                // Clear measurement state and memoization
+                diceNumberSelf  = DiceNumbers::NONE;
+                upSideSelf      = UpSide::NONE;
+                measureAxisSelf = MeasuredAxises::UNDEFINED;
+                lastRollBasis   = MeasuredAxises::UNDEFINED;
+                lastRollNumber  = DiceNumbers::NONE;
+                
                 changeState(Trigger::TELEPORT_CONFIRMED);
                 break;
 
