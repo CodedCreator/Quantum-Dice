@@ -135,11 +135,6 @@ void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, Sc
                    prev_entanglement_color, entanglement_color_self);
             prev_entanglement_color = entanglement_color_self;
         }
-        if (flashColorChanged) {
-            debugf("Flash color toggled from %s to %s - forcing screen refresh\n",
-                   prev_flashColor ? "ON" : "OFF", flashColor ? "ON" : "OFF");
-            prev_flashColor = flashColor;
-        }
         // Force refresh of any entangled screens by resetting their prev state
         if (x0 == ScreenStates::MIX1TO6_ENTANGLED) {
             prevX0 = ScreenStates::BLANC;
@@ -158,6 +153,41 @@ void checkAndCallFunctions(ScreenStates x0, ScreenStates x1, ScreenStates y0, Sc
         }
         if (z1 == ScreenStates::MIX1TO6_ENTANGLED) {
             prevZ1 = ScreenStates::BLANC;
+        }
+
+        if (flashColorChanged) {
+            debugf("Flash color toggled from %s to %s - forcing screen refresh\n",
+                   prev_flashColor ? "ON" : "OFF", flashColor ? "ON" : "OFF");
+            prev_flashColor = flashColor;
+
+            if (x0 == ScreenStates::MIX1TO6_ENTANGLED) {
+                prevX0 = ScreenStates::BLANC;
+            }
+            if (y0 == ScreenStates::MIX1TO6_ENTANGLED) {
+                prevY0 = ScreenStates::BLANC;
+            }
+            if (z0 == ScreenStates::MIX1TO6_ENTANGLED) {
+                prevZ0 = ScreenStates::BLANC;
+            }
+            if (x1 == ScreenStates::MIX1TO6_ENTANGLED) {
+                prevX1 = ScreenStates::BLANC;
+            }
+            if (y1 == ScreenStates::MIX1TO6_ENTANGLED) {
+                prevY1 = ScreenStates::BLANC;
+            }
+            if (z1 == ScreenStates::MIX1TO6_ENTANGLED) {
+                prevZ1 = ScreenStates::BLANC;
+            }
+
+            if (!flashColor) { // Flash ended, refresh to normal color
+                debugln("Flash ended - refreshing entangled screens to normal color");
+                x0 = ScreenStates::MIX1TO6;
+                y0 = ScreenStates::MIX1TO6;
+                z0 = ScreenStates::MIX1TO6;
+                x1 = ScreenStates::MIX1TO6;
+                y1 = ScreenStates::MIX1TO6;
+                z1 = ScreenStates::MIX1TO6;
+            }
         }
     }
 
