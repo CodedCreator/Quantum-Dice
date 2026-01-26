@@ -28,7 +28,7 @@ def cleanArguments(arguments):
     new_arguments = []
     skipNext = False
     for argument in arguments:
-        if skip_nskipNextext:
+        if skipNext:
             skipNext = False
             continue
 
