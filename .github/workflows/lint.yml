@@ -29,9 +29,10 @@ jobs:
         run: |
           arduino-cli compile --jobs 0 --profile esp32s3_dev_module --build-path Arduino/QuantumDice/build --only-compilation-database Arduino/QuantumDice
 
-      - name: Make lint script executable
-        run: chmod +x scripts/lint.sh
+      - name: Clean compilation database
+        run: |
+          python3 scripts/clean_compile_commands.py Arduino/QuantumDice/build/compile_commands.json
 
       - name: Run clang-tidy
         run: |
-          bash scripts/lint.sh
+          git ls-files | grep -E '\.(cc|cpp|cxx|ino)$' | grep -v -E 'build/|ImageLibrary/' | xargs -r -P 4 "clang-tidy -p Arduino/QuantumDice/build"
