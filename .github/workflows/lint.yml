@@ -35,4 +35,5 @@ jobs:
 
       - name: Run clang-tidy
         run: |
-          git ls-files | grep -E '\.(cc|cpp|cxx|ino)$' | grep -v -E 'build/|ImageLibrary/' | xargs -r -P 4 "clang-tidy -p Arduino/QuantumDice/build"
+          echo $(git ls-files | grep -E '\.(cc|cpp|cxx|ino)$' | grep -v -E 'build/|ImageLibrary/')
+          git ls-files | grep -E '\.(cc|cpp|cxx|ino)$' | grep -v -E 'build/|ImageLibrary/' | xargs -r -P 4 "clang-tidy -p \"Arduino/QuantumDice/build\""
