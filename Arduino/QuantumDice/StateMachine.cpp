@@ -781,7 +781,10 @@ void StateMachine::update() {
     }
 
     // Periodically send watchdog to broadcast presence to nearby dice
-    if (currentTime - lastWatchdogTime >= 500) { // Send every 500ms
+    if (currentState.mode != Mode::CLASSIC
+        && (currentTime - lastWatchdogTime >= 500)) { // Send every 500ms
+        // Not sending in CLASSIC mode ensures we don't get contacted about entanglement
+        // and reduces power consumption and network traffic
         sendWatchDog();
         lastWatchdogTime = currentTime;
     }
