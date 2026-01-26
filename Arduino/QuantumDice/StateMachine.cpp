@@ -414,7 +414,8 @@ StateMachine::StateMachine()
                  .entanglementState = EntanglementState::PURE},
     stateEntryTime(0), partnerMeasurementAxis(MeasuredAxises::UNDEFINED),
     partnerDiceNumber(DiceNumbers::NONE), teleportedMeasurementAxis(MeasuredAxises::UNDEFINED),
-    teleportedDiceNumber(DiceNumbers::NONE) {
+    teleportedDiceNumber(DiceNumbers::NONE), lastRollBasis(MeasuredAxises::UNDEFINED),
+    lastRollNumber(DiceNumbers::NONE) {
     // Constructor does not call onEntry. That's done in StateMachine::begin()
     memset((void *)this->current_peer, 0xFF, 6);
     memset((void *)this->next_peer, 0xFF, 6);
@@ -1066,9 +1067,19 @@ void StateMachine::enterObserved() {
     // Determine the dice number based on entanglement state
     switch (currentState.entanglementState) {
         case EntanglementState::PURE:
-            // Simple random number 1-6
-            debugln("PURE state: generating random number");
-            diceNumberSelf = selectOneToSix();
+            // Check if we're measuring in the same basis as the last roll
+            if (measureAxisSelf == lastRollBasis && lastRollNumber != DiceNumbers::NONE) {
+                // Same basis - return the memoized value
+                debugln("PURE state: same basis as last roll, using memoized value");
+                diceNumberSelf = lastRollNumber;
+            } else {
+                // Different basis or first roll - generate new random number
+                debugln("PURE state: generating random number");
+                diceNumberSelf = selectOneToSix();
+                // Update memoization
+                lastRollBasis  = measureAxisSelf;
+                lastRollNumber = diceNumberSelf;
+            }
             break;
 
         case EntanglementState::ENTANGLED:
@@ -1079,6 +1090,10 @@ void StateMachine::enterObserved() {
             // Send our measurement to partner
             sendMeasurements(this->current_peer, stateSelf, diceNumberSelf, upSideSelf,
                              measureAxisSelf);
+
+            // Update memoization
+            lastRollBasis  = measureAxisSelf;
+            lastRollNumber = diceNumberSelf;
 
             // Clear entanglement
             currentState.entanglementState = EntanglementState::PURE;
@@ -1100,6 +1115,10 @@ void StateMachine::enterObserved() {
                 diceNumberSelf = selectOneToSix();
             }
 
+            // Update memoization
+            lastRollBasis  = measureAxisSelf;
+            lastRollNumber = diceNumberSelf;
+
             // Clear partner info and entanglement
             partnerMeasurementAxis         = MeasuredAxises::UNDEFINED;
             partnerDiceNumber              = DiceNumbers::NONE;
@@ -1120,6 +1139,10 @@ void StateMachine::enterObserved() {
                 debugln("Different axis from teleported state - random value");
                 diceNumberSelf = selectOneToSix();
             }
+
+            // Update memoization
+            lastRollBasis  = measureAxisSelf;
+            lastRollNumber = diceNumberSelf;
 
             // Clear teleported info
             teleportedMeasurementAxis      = MeasuredAxises::UNDEFINED;

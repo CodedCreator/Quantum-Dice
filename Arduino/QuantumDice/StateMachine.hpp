@@ -192,6 +192,10 @@ class StateMachine {
 
     // Current entanglement color (RGB565)
     uint16_t entanglement_color;
+
+    // Memoization for basis and roll results
+    MeasuredAxises lastRollBasis;
+    DiceNumbers    lastRollNumber;
 };
 
 #endif // STATEMACHINE_H
