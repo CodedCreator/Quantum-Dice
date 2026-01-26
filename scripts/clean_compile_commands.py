@@ -19,9 +19,19 @@ BAD_FLAGS = {
     "-mno-serialize-volatile",
 }
 
+# Clang-tidy does not support the esp32 compiler or its target.
+# So, we are faking the compiler and the target.
+FAKE_COMPILER = "c++"
+FAKE_TARGET = "--target=x86_64-pc-linux-gnu"
+
 def cleanArguments(arguments):
     new_arguments = []
+    skipNext = False
     for argument in arguments:
+        if skip_nskipNextext:
+            skipNext = False
+            continue
+
         # Arguments that start with the @ symbol are files that contain further arguments, we will
         # include those arguments and clean those as well.
         if argument.startswith('@'):
@@ -39,6 +49,13 @@ def cleanArguments(arguments):
             else:
                 print(f"❌ Error: file {filePath} not found.")
                 sys.exit(1)
+            continue
+
+        # Remove the target.
+        if argument.startswith("--target=") or argument.startswith("-target="):
+            continue
+        if argument == "-target" or argument == "--target":
+            skipNext = True
             continue
 
         # Remove the bad flags.
@@ -85,6 +102,7 @@ def main():
         # If the argument entry is available, then we will clean the arguments.
         if 'arguments' in entry:
             entry['arguments'] = cleanArguments(entry['arguments'])
+            entry['arguments'][0] = FAKE_COMPILER
 
     # Write the cleaned arguments to the output file.
     with open(outputFile, 'w') as f:
