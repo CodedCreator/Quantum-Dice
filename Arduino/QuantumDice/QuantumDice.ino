@@ -64,6 +64,18 @@ void setup() {
     imuSensor->update();
     imuSensor->resetTumbleDetection();
 
+    usleep(1000);
+
+    welcomeInfo(screenselections::X0);
+    voltageIndicator(screenselections::X0);
+    displayQRcode(screenselections::X1);
+
+    displayEinstein(screenselections::ZZ);
+    displayUTlogo(screenselections::YY);
+
+    usleep(1000);
+    
+
     // Set IMU sensor in state machine
     stateMachine.setImuSensor(imuSensor);
 
