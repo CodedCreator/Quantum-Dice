@@ -204,7 +204,8 @@ void StateMachine::sendEntanglementConfirm(uint8_t *target) {
         debugln("No colors configured, using default yellow");
     }
 
-    entanglement_color_self = myData.data.entangleConfirm.color;
+    this->entanglement_color = myData.data.entangleConfirm.color;
+    entanglement_color_self  = this->entanglement_color; // Update global
 
     // Trigger color flash if showColors is disabled
     if (!showColors) {
@@ -245,7 +246,7 @@ void StateMachine::sendTeleportPayload(uint8_t *target, State state, DiceNumbers
                                        UpSide upSide, MeasuredAxises measureAxis,
                                        uint8_t *entangled_peer, uint16_t color) {
     EspNowSensor<message>::AddPeer(target);
-    debugln("Send teleport payload");
+    debugf("Send teleport payload with colour 0x%04X\n", color);
     message myData;
     myData.type                             = message_type::MESSAGE_TYPE_TELEPORT_PAYLOAD;
     myData.data.teleportPayload.state       = state;
@@ -389,7 +390,7 @@ const std::array<StateTransition, 37> StateMachine::stateTransitions = {
                    std::nullopt, Trigger::LOW_BATTERY}}
 };
 
-StateTransition StateMachine::getStateTransition(State currentState, Trigger trigger) {
+auto StateMachine::getStateTransition(State currentState, Trigger trigger) -> StateTransition {
     for (const StateTransition &transition : StateMachine::stateTransitions) {
         bool modeMatch = !transition.currentMode.has_value()
                          || transition.currentMode.value() == currentState.mode;

@@ -132,7 +132,7 @@ class StateMachine {
         return currentState;
     }
 
-    auto getStateTransition(State currentState, Trigger trigger) -> StateTransition;
+    static auto getStateTransition(State currentState, Trigger trigger) -> StateTransition;
 
   private:
     // State handlers for each mode/throwState/entanglementState combination
@@ -156,7 +156,7 @@ class StateMachine {
     static void sendMeasurements(uint8_t *target, State state, DiceNumbers diceNumber,
                                  UpSide upSide, MeasuredAxises measureAxis);
     static void sendEntangleRequest(uint8_t *target);
-    static void sendEntanglementConfirm(uint8_t *target);
+    void sendEntanglementConfirm(uint8_t *target); // non-static to access entanglement_color
     static void sendEntangleDenied(uint8_t *target);
     static void sendTeleportRequest(uint8_t *target_m, uint8_t *target_b);
     static void sendTeleportConfirm(uint8_t *target);
