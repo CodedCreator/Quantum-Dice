@@ -209,7 +209,7 @@ void StateMachine::sendEntanglementConfirm(uint8_t *target) {
 
     // Trigger color flash if showColors is disabled
     if (!showColors) {
-        flashColor = true;
+        flashColor          = true;
         flashColorStartTime = millis();
         debugln("Triggering color flash (accepting entanglement)");
     }
@@ -589,7 +589,7 @@ void StateMachine::update() {
 
                     // Trigger color flash if showColors is disabled
                     if (!showColors) {
-                        flashColor = true;
+                        flashColor          = true;
                         flashColorStartTime = millis();
                         debugln("Triggering color flash (receiving entanglement)");
                     }
@@ -654,7 +654,7 @@ void StateMachine::update() {
                     measureAxisSelf = MeasuredAxises::UNDEFINED;
                     lastRollBasis   = MeasuredAxises::UNDEFINED;
                     lastRollNumber  = DiceNumbers::NONE;
-                    
+
                     changeState(Trigger::TELEPORT_INITIATED);
                 }
                 break;
@@ -674,7 +674,7 @@ void StateMachine::update() {
                 measureAxisSelf = MeasuredAxises::UNDEFINED;
                 lastRollBasis   = MeasuredAxises::UNDEFINED;
                 lastRollNumber  = DiceNumbers::NONE;
-                
+
                 changeState(Trigger::TELEPORT_CONFIRMED);
                 break;
 
@@ -702,14 +702,14 @@ void StateMachine::update() {
                         this->entanglement_color = teleported_color;
                         entanglement_color_self  = this->entanglement_color; // Update global
                         debugf("Inherited entanglement color: 0x%04X\n", this->entanglement_color);
-                        
+
                         // Trigger color flash if showColors is disabled
                         if (!showColors) {
-                            flashColor = true;
+                            flashColor          = true;
                             flashColorStartTime = millis();
                             debugln("Triggering color flash (receiving teleportation)");
                         }
-                        
+
                         diceNumberSelf  = DiceNumbers::NONE;
                         upSideSelf      = UpSide::NONE;
                         measureAxisSelf = MeasuredAxises::UNDEFINED;
