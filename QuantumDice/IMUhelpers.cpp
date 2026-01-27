@@ -1,9 +1,4 @@
-/*
-   IMUhelpers.cpp - Implementation of polymorphic IMU sensor interface
-   */
-
 #include "IMUhelpers.hpp"
-
 #include "defines.hpp"
 
 // ============================================
@@ -17,32 +12,22 @@ BNO055IMUSensor::BNO055IMUSensor() : _bno(55), _prevAccelMag(0), _currentAccelMa
 // CORE FUNCTIONS
 // ============================================
 
-auto BNO055IMUSensor::init(bool verbose) -> bool {
+auto BNO055IMUSensor::init() -> bool {
     // Initialize I2C and BNO055
-    if (verbose) {
-        info("Initializing BNO055... ");
-    }
+    debug("Initializing BNO055... ");
 
     if (!_bno.begin()) {
-        if (verbose) {
-            infoln("FAILED! Sensor not detected.");
-        }
+        errorln("FAILED! Sensor not detected.");
         return false;  // Sensor not detected
     }
 
-    if (verbose) {
-        infoln("detected.");
-    }
+    debugln("BNO055 detected.");
     delay(100);
 
     // Apply custom axis remapping
-    if (verbose) {
-        info("Applying axis remapping... ");
-    }
+    debug("Applying axis remapping... ");
     applyAxisRemap();
-    if (verbose) {
-        infoln("done.");
-    }
+    debugln("done.");
 
     // Use external crystal for better accuracy
     _bno.setExtCrystalUse(true);
@@ -51,9 +36,7 @@ auto BNO055IMUSensor::init(bool verbose) -> bool {
 
     // Wait for sensor to produce sensible readings
     // This is especially important with ESP32 and I2C initialization
-    if (verbose) {
-        info("Waiting for stable readings... ");
-    }
+    debug("Waiting for stable readings... ");
 
     unsigned long startTime = millis();
     const unsigned long timeout = 5000;  // 5 second timeout
@@ -71,34 +54,28 @@ auto BNO055IMUSensor::init(bool verbose) -> bool {
             sensibleReading = true;
             _prevAccelMag = mag;
             _currentAccelMag = mag;
-            if (verbose) {
-                info("OK (");
-                info(mag, 2);
-                info(" m/s² after ");
-                info(attempts);
-                infoln(" attempts)");
-            }
+            debug("OK (");
+            debug(mag, 2);
+            debug(" m/s² after ");
+            debug(attempts);
+            debugln(" attempts)");
         } else {
             attempts++;
-            if (verbose && attempts % 10 == 0) {
-                info(".");
+            if (attempts % 10 == 0) {
+                debug(".");
             }
             delay(50);  // Wait a bit before next reading
         }
     }
 
     if (!sensibleReading) {
-        if (verbose) {
-            infoln("\nFAILED! Timeout - sensor not producing valid readings.");
-            infoln("Check connections and try again.");
-        }
+        debugln("\nFAILED! Timeout - sensor not producing valid readings.");
+        debugln("Check connections and try again.");
         return false;  // Timeout - sensor not producing valid readings
     }
 
     // Do a few more updates to stabilize the baseline
-    if (verbose) {
-        info("Stabilizing baseline... ");
-    }
+    debug("Stabilizing baseline... ");
     for (int i = 0; i < 5; i++) {
         _accel = _bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
         _gyro = _bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
@@ -106,10 +83,8 @@ auto BNO055IMUSensor::init(bool verbose) -> bool {
         _prevAccelMag = _currentAccelMag;
         delay(20);
     }
-    if (verbose) {
-        infoln("done.");
-        infoln("✓ BNO055 initialization complete!");
-    }
+    debugln("done.");
+    debugln("✓ BNO055 initialization complete!");
 
     return true;  // Success
 }

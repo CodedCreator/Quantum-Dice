@@ -51,13 +51,14 @@ A custom partition setting is used to include a **littlFS** partition. Therefor 
 **Communication:**
 
 - ESP-NOW protocol enables peer-to-peer communication between paired dice
-- Each dice stores the MAC addresses of its paired partners
+- Automatic neighbor discovery via mesh networking
 
 **Data Storage:**
 
-- Configuration data stored in littleFS
-- Configuration file (called XXXXX_config.txt where XXXXX is the Set Name of the dice) must be uploaded to littleFs first.
-- See example layout [text](../TEST1_config.txt)
+- Configuration data stored in LittleFS
+- Configuration file (called XXXXX_config.txt where XXXXX is the Set Name of the dice)
+- The system automatically detects and loads the config file on boot
+- [See example configs](/example_configs/)
 
 **Reference Documentation:**
 
@@ -140,17 +141,15 @@ This is **completely normal** for a fresh module from the supplier. Here's what'
 
 The ESP32-S3 module has never been programmed and needs its first firmware upload.
 
-### 4.1 Initial Upload - Blink Test
+### 4.1 Initial Upload
 
-When programming an ESP32-S3 for the first time, a specific initialization procedure is required. We'll use the Blink_to_Partitions example for this [Blink with Partitions](../Blink_to_Partitions). This sketch is a copy of the build-in sketch, but now with the custom `partitions.csv` included
+When programming an ESP32-S3 for the first time, a specific initialization procedure is required.
 
 > **⚠️ REMINDER:** Disconnect the 4-wire power cable before connecting USB!
 
-#### Step 1: Load the Blink Sketch
+#### Step 1: Load the QuantumDice sketch
 
-1. Go to **File > Examples > 01.Basics > Blink**
-2. The Blink sketch will open in a new window
-3. Leave the code as-is (default `LED_BUILTIN` is fine)
+1. Go to **File > Open** and select the QuantumDice.ino file
 
 #### Step 2: Enter Download Mode
 
@@ -180,18 +179,16 @@ Your board is now in download mode and ready to receive code.
 3. You should see "Connecting..." followed by upload progress
 4. Once complete, **press the RESET button** on your board
 
-The Blink sketch is now running (though the LED may not be visible on this board).
+The QuantumDice should now be running.
 
 **After this initial upload, future uploads will not require the BOOT button procedure.**
 
 ### 4.2 Board Configuration
 
-The board configuration is performed with a XXXX_config.txt file. Use enclosed [TEST1_config.txt](../TEST1_config.txt) as a starter.
-
-Fill in the required data (mainly `diceId` and the `deviceA_mac`, `deviceB1_mac` and `deviceB2_mac` from the current ESP32 and the other ESP32 of the set)
+The board configuration is performed with a XXXXX_config.txt file. You can use the  enclosed [TEST1_config.txt](/example_configs/TEST1_config.txt) as a starter.
 
 Uploading the config file with
-[ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/) tool (need Google Chrome to run). Instructions on how to upload see ....
+[ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/) tool (need Google Chrome to run). For complete instructions, see the [Setup Guide](../README.md).
 
 ---
 
@@ -208,17 +205,13 @@ Uploading the config file with
 3. Optionally disconnect the display FPC cables for easier access to buttons
 4. Connect a USB-C cable to the underside of the ProcessorPCB
 
-**Important:** If your board is unconfigured, complete the [Board Configuration](#42-board-configuration) steps first.
-
 ### 5.2 Upload the Sketch
 
-1. Download the **QuantumDice.ino** sketch from GitHub
-2. Save it to your Arduino default folder
-3. Open the sketch in Arduino IDE
-4. Connect the ProcessorPCB via USB-C cable
-5. Select the correct communication port from **Tools > Port**
-6. Click **Upload** to compile and upload the sketch
-7. Wait for the upload to complete
+1. Open the sketch in Arduino IDE
+2. Connect the ProcessorPCB via USB-C cable
+3. Select the correct communication port from **Tools > Port**
+4. Click **Upload** to compile and upload the sketch
+5. Wait for the upload to complete
 
 ### 5.3 Verify Operation
 
@@ -228,7 +221,7 @@ After uploading, open the **Serial Monitor** (baud rate: **115200**) to view deb
 
 The Serial Monitor will display:
 
-- Loaded configuration (Dice ID, MAC addresses, colors, timing constants)
+- Loaded configuration (Dice ID, colors, timing constants)
 - Hardware pin configuration
 - Display initialization
 - BNO055 sensor detection and calibration status
@@ -239,98 +232,112 @@ The Serial Monitor will display:
 **Example Output:**
 
 ```text
-/Users/xxxxxxx/Github/Quantum-Dice-by-UTwente/Arduino/QuantumDice/QuantumDice.ino Dec 29 2025 14:01:07
-FW: 1.3.0
-LittleFS mounted successfully
-No config path specified, searching for *_config.txt...
-Found config file: TEST1_config.txt
-Auto-detected config file: /TEST1_config.txt
-Config loaded successfully
-Loaded global config from: /TEST1_config.txt
-=== Global Configuration ===
-Dice ID: TEST1
-Device A MAC: D0:CF:13:36:17:DC
-Device B1 MAC: AA:BB:CC:DD:EE:02
-Device B2 MAC: DC:DA:0C:21:02:44
-X Background: 0x0000 (0)
-Y Background: 0x0000 (0)
-Z Background: 0x0000 (0)
-Entangle AB1 Color: 0xFFE0 (65504)
-Entangle AB2 Color: 0x07E0 (2016)
-RSSI Limit: -35 dBm
-Is SMD: false
-Is Nano: false
-Always Seven: false
-Random Switch Point: 50%
-Tumble Constant: 45.00
-Deep Sleep Timeout: 300000 ms
-Checksum: 0x00
-============================
+[LOG]	
+[LOG]	╔════════════════════════════════════════╗
+[LOG]	║      QUANTUM DICE INITIALIZATION       ║
+[LOG]	╚════════════════════════════════════════╝
+
+[LOG]	/home/twan/Development/Quantum-Dice-by-UTwente/QuantumDice/QuantumDice.ino Jan 26 2026 21:09:54
+[L] FW: 2.0.0
+[LOG]	Step 1: Initializing filesystem and configuration...
+[LOG]	
+[DEBUG]	Mounting LittleFS...
+[DEBUG]	LittleFS mounted successfully
+[D] Total: 4194304 bytes, Used: 8192 bytes
+[D] Found config file: DEFAULT_config.txt
+[D] Loading global config from /DEFAULT_config.txt...
+[DEBUG]	LittleFS mounted successfully
+[DEBUG]	Loading config from /DEFAULT_config.txt
+[D] Loaded 4 entanglement colors
+[DEBUG]	Config loaded successfully
+[D] Loaded global config from: /DEFAULT_config.txt
+[LOG]	✓ Filesystem and configuration ready!
+
+[LOG]	=== Global Configuration ===
+[L] Dice ID: DEFAULT
+[L] X Background: 0x0000 (0)
+[L] Y Background: 0x0000 (0)
+[L] Z Background: 0x0000 (0)
+[L] Entangle Colors (4): ffe0, 7e0, 7ff, f81f
+[LOG]	
+[L] Color Flash Timeout: 250 ms
+[L] RSSI Limit: -35 dBm
+[L] Is SMD: true
+[L] Is Nano: false
+[L] Deep Sleep Timeout: 300000 ms
+[L] Checksum: 0x00
+[LOG]	============================
+[LOG]	
+Step 2: Initializing hardware...
+[LOG]	
 Initializing hardware pins...
 Hardware pins initialized successfully!
-
+[LOG]	
 === Hardware Pin Configuration ===
-Board Type: DEVKIT
-Screen Type: HDR
-
+[L] Board Type: DEVKIT
+[L] Screen Type: SMD
+[LOG]	
 TFT Display Pins:
-  CS:  GPIO10
-  RST: GPIO48
-  DC:  GPIO47
-
+[L]   CS:  GPIO10
+[L]   RST: GPIO48
+[L]   DC:  GPIO47
+[LOG]	
 Screen CS Pins:
-  Screen 0: GPIO4
-  Screen 1: GPIO5
-  Screen 2: GPIO6
-  Screen 3: GPIO7
-  Screen 4: GPIO15
-  Screen 5: GPIO16
-
+[L]   Screen 0: GPIO4
+[L]   Screen 1: GPIO5
+[L]   Screen 2: GPIO6
+[L]   Screen 3: GPIO7
+[L]   Screen 4: GPIO15
+[L]   Screen 5: GPIO16
+[L] 
 ADC Pin: GPIO2
-==================================
+[LOG]	==================================
 
-Dice ID: TEST1
-Board type: DEVKIT
+[L]  - Dice ID: [LOG]	DEFAULT
+[L] Board type: [LOG]	DEVKIT
+[L] Connectie type isSMD: [LOG]	SMD
 Initializing displays...
 Displays initialized successfully!
-Qlab logo on screen: 14
-Initializing BNO055... E (3521) i2c.master: I2C transaction unexpected nack detected
-E (3522) i2c.master: s_i2c_synchronous_transaction(945): I2C transaction failed
-E (3793) i2c.master: I2C transaction unexpected nack detected
-E (3793) i2c.master: s_i2c_synchronous_transaction(945): I2C transaction failed
-E (3795) i2c.master: i2c_master_transmit_receive(1248): I2C transaction failed
-detected.
-Applying axis remapping... done.
-Applying thumble threshold... done.
-Waiting for stable readings... OK (10.12 m/s² after 0 attempts)
-Stabilizing baseline... done.
-✓ BNO055 initialization complete!
+[D] Qlab logo on screen: [DEBUG]	14
+[LOG]	
+Step 3: Initializing IMU sensor...
+[LOG]	
+[L] Initializing BNO055... E (3501) i2c.master: I2C transaction unexpected nack detected
+E (3502) i2c.master: s_i2c_synchronous_transaction(945): I2C transaction failed
+E (3503) i2c.master: i2c_master_transmit_receive(1248): I2C transaction failed
+E (3520) i2c.master: I2C transaction unexpected nack detected
+...
+E (3773) i2c.master: s_i2c_synchronous_transaction(945): I2C transaction failed
+E (3775) i2c.master: i2c_master_transmit_receive(1248): I2C transaction failed
+[LOG]	detected.
+[L] Applying axis remapping... [LOG]	done.
+[L] Waiting for stable readings... [L] OK ([L] 9.46[L]  m/s² after [L] 1[LOG]	 attempts)
+[L] Stabilizing baseline... [LOG]	done.
+[LOG]	✓ BNO055 initialization complete!
+[D] QR code on screen: [DEBUG]	1
+[D] Einstein on screen: [DEBUG]	8
+[D] UTwente logo on screen: [DEBUG]	7
+[LOG]	
+Step 4: Completing initialization...
+[LOG]	
 ESP-NOW initialized successfully!
-MAC Address is : D0:CF:13:36:17:DC
-Self role: ROLE_A
-ESP-NOW initialized successfully!
-MAC Address is : D0:CF:13:36:17:DC
-StateMachine Begin: Calling onEntry for initial state
------------- enter IDLE state -------------
-Curent diceState: : DiceStates::SINGLE
-Previous diceState: : DiceStates::SINGLE
-Last Packet SDelivery Fail
-WELCOME function called
-Einstein on screen: 2
-GODDICE function called
-Qlab logo on screen: 4
-QLAB_LOGO function called
-UTwente logo on screen: 1
-UT_LOGO function called
-Einstein on screen: 3
-GODDICE function called
-Einstein on screen: 5
-GODDICE function called
-Setup complete!
-==================================
-
-stateMachine: CLASSIC_STATE
-DiceState: DiceStates::CLASSIC
+[D] MAC Address is : D0[D] :CF[D] :13[D] :36[D] :15[D] :90[D] 
+[LOG]	ESP-NOW initialized successfully!
+[D] MAC Address is : D0[D] :CF[D] :13[D] :36[D] :15[D] :90[D] 
+[LOG]	StateMachine Begin: Calling onEntry for initial state
+[D] StateMachine: CLASSIC | IDLE | PURE
+[DEBUG]	=== Entering CLASSIC MODE ===
+[DEBUG]	Entering N2 case
+[DEBUG]	Entering N3 case
+[DEBUG]	Entering N6 case
+[DEBUG]	Entering N5 case
+[DEBUG]	Entering N4 case
+[DEBUG]	Entering N1 case
+[LOG]	
+[LOG]	╔════════════════════════════════════════╗
+[LOG]	║       SETUP COMPLETE - READY!          ║
+[LOG]	╚════════════════════════════════════════╝
+```
 
 
 > **Note:** You may see some I2C error messages during initialization. These are typically harmless if the sensors are detected successfully afterward.

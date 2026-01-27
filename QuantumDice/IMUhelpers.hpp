@@ -63,8 +63,7 @@ class IMUSensor
 
         // Initialize sensor
         // Returns true if successful, false if sensor not detected
-        // verbose: Set to true to print initialization progress to Serial
-        virtual auto init(bool verbose = false) -> bool = 0;
+        virtual auto init() -> bool = 0;
 
         // Must be called regularly to update sensor state
         virtual void update() = 0;
@@ -210,7 +209,7 @@ class BNO055IMUSensor : public IMUSensor
         // IMPLEMENTATION OF IMUSensor INTERFACE
         // ============================================
 
-        auto init(bool verbose = false) -> bool override;
+        auto init() -> bool override;
         void update() override;
 
         auto moving() -> bool override;
