@@ -114,6 +114,10 @@ const std::map<State, StateMachine::StateFunction> StateMachine::stateFunctions 
    {&StateMachine::enterObserved, &StateMachine::whileObserved}      },
   {State{Mode::QUANTUM, ThrowState::OBSERVED, EntanglementState::TELEPORTED},
    {&StateMachine::enterObserved, &StateMachine::whileObserved}      },
+
+  // === LOW BATTERY MODE ===
+  {State{Mode::LOW_BATTERY, ThrowState::IDLE, EntanglementState::PURE},
+   {&StateMachine::enterLowBattery, &StateMachine::whileLowBattery}}
 };
 
 namespace {
@@ -836,6 +840,8 @@ void StateMachine::enterClassicIdle() {
 void StateMachine::whileClassicIdle() {
     // Check for low battery
     if (checkMinimumVoltage()) {
+        currentState.entanglementState = EntanglementState::PURE; // Reset entanglement state
+        currentState.throwState        = ThrowState::IDLE;   // Reset throw state
         changeState(Trigger::LOW_BATTERY);
         return;
     }
@@ -871,6 +877,8 @@ void StateMachine::enterQuantumIdle() {
 void StateMachine::whileQuantumIdle() {
     // Check for low battery
     if (checkMinimumVoltage()) {
+        currentState.entanglementState = EntanglementState::PURE; // Reset entanglement state
+        currentState.throwState        = ThrowState::IDLE;   // Reset throw state
         changeState(Trigger::LOW_BATTERY);
         return;
     }
@@ -965,6 +973,8 @@ void StateMachine::enterThrowing() {
 void StateMachine::whileThrowing() {
     // Check for low battery
     if (checkMinimumVoltage()) {
+        currentState.entanglementState = EntanglementState::PURE; // Reset entanglement state
+        currentState.throwState        = ThrowState::IDLE;   // Reset throw state
         changeState(Trigger::LOW_BATTERY);
         return;
     }
@@ -1175,6 +1185,8 @@ void StateMachine::enterObserved() {
 void StateMachine::whileObserved() {
     // Check for low battery
     if (checkMinimumVoltage()) {
+        currentState.entanglementState = EntanglementState::PURE; // Reset entanglement state
+        currentState.throwState        = ThrowState::IDLE;   // Reset throw state
         changeState(Trigger::LOW_BATTERY);
         return;
     }
