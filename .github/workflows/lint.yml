@@ -27,12 +27,12 @@ jobs:
 
       - name: Generate compilation database
         run: |
-          arduino-cli compile --jobs 0 --profile esp32s3_dev_module --build-path Arduino/QuantumDice/build --only-compilation-database Arduino/QuantumDice
+          arduino-cli compile --jobs 0 --profile esp32s3_dev_module --build-path QuantumDice/build --only-compilation-database QuantumDice
 
       - name: Clean compilation database
         run: |
-          python3 scripts/clean_compile_commands.py Arduino/QuantumDice/build/compile_commands.json
-
+          python3 scripts/clean_compile_commands.py QuantumDice/build/compile_commands.json
       - name: Run clang-tidy
         run: |
-          git ls-files | grep -E '\.(cc|cpp|cxx|ino)$' | grep -v -E 'QuantumDiceInit|build/|ImageLibrary/' | xargs -r -P 4 clang-tidy -p Arduino/QuantumDice/build
+
+          git ls-files | grep -E '\.(cc|cpp|cxx|ino)$' | grep -v -E 'build/|ImageLibrary/' | xargs -r -P 4 clang-tidy -p QuantumDice/build

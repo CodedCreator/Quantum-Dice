@@ -16,4 +16,4 @@ jobs:
 
       - name: Compile the project
         run: |
-          arduino-cli compile --jobs 0 --profile esp32s3_dev_module Arduino/QuantumDice
+          arduino-cli compile --jobs 0 --profile esp32s3_dev_module QuantumDice

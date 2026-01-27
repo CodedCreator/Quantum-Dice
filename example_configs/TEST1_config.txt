@@ -2,7 +2,7 @@
 # Lines starting with # are comments
 # Edit values after the = sign
 # Save this file as XXXXX_config.txt (XXXXX is diceID) maximum of 5 characters
-# upload to your Quantum Dice (See instructions)
+# Upload to your Quantum Dice (See instructions)
 # https://thelastoutpostworkshop.github.io/ESPConnect/
 
 # ==========================================
@@ -10,16 +10,6 @@
 # ==========================================
 # Unique identifier for this dice (max 5 characters)
 diceId=TEST1
-
-# ==========================================
-# DEVICE MAC ADDRESSES (IMPORTANT)
-# ==========================================
-# Format: AA:BB:CC:DD:EE:FF (hexadecimal)
-# Get MAC addresses from your ESP32 devices
-# if B2 is not used, leave as is
-deviceA_mac=d0:cf:13:33:58:70
-deviceB1_mac=0:cf:13:36:40:94
-deviceB2_mac=DC:DA:0C:21:02:44
 
 # Belows setting is for Advanced users. Default values are ok to use
 

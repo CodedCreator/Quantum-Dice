@@ -432,7 +432,7 @@ void welcomeInfo(uint8_t screens) {
     drawStringCentered(tft, (char *)displayText1, 62);
 
     // Use DICE_ID from config
-    strcpy((char *)displayText2, (char *)currentConfig.diceId);
+    strcpy((char *)displayText2, (char *)currentConfig.diceId.c_str());
     drawStringCentered(tft, (char *)displayText2, 104);
 }
 
